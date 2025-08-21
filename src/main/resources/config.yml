@@ -1,0 +1,73 @@
+# VirtualCamera 配置文件
+
+# 插件设置
+settings:
+  # 是否在玩家进入相机模式时隐藏界面
+  hide-interface: true
+  
+  # 是否在玩家进入相机模式时设置为飞行模式
+  enable-flight: true
+  
+  # 是否在玩家进入相机模式时设置为旁观者模式
+  spectator-mode: false
+  
+  # 相机移动速度倍数
+  movement-speed: 1.0
+  
+  # 默认过渡时间（秒）
+  default-transition-duration: 2.0
+  
+  # 默认过渡类型 (NONE, LINEAR, EASE_IN, EASE_OUT, EASE_IN_OUT)
+  default-transition-type: EASE_IN_OUT
+
+# 预设示例
+presets:
+  example_preset:
+    world: world
+    x: 0.0
+    y: 70.0
+    z: 0.0
+    yaw: 0.0
+    pitch: 0.0
+    type: FIXED
+    transition: EASE_IN_OUT
+    transitionDuration: 2.0
+  
+  example_follow:
+    world: world
+    x: 0.0
+    y: 70.0
+    z: 0.0
+    yaw: 0.0
+    pitch: 0.0
+    type: FOLLOW
+    transition: LINEAR
+    transitionDuration: 1.0
+    targetEntity: ExamplePlayer
+
+# 序列示例
+sequences:
+  example_sequence:
+    loop: false
+    entries:
+      entry0:
+        preset: example_preset
+        duration: 5.0
+      entry1:
+        preset: example_follow
+        duration: 10.0
+
+# 语言设置
+messages:
+  prefix: "&8[&bVirtualCamera&8] "
+  enter-camera-mode: "&a已进入相机模式。"
+  exit-camera-mode: "&a已退出相机模式。"
+  preset-saved: "&a已保存预设：&e{name}"
+  preset-loaded: "&a已加载预设：&e{name}"
+  preset-deleted: "&a已删除预设：&e{name}"
+  preset-not-found: "&c找不到预设：&e{name}"
+  sequence-playing: "&a正在播放序列：&e{name}"
+  sequence-stopped: "&a已停止序列播放。"
+  sequence-not-found: "&c找不到序列：&e{name}"
+  no-permission: "&c你没有权限执行此命令！"
+  player-only: "&c此命令只能由玩家执行！"

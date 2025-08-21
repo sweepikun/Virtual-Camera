@@ -1,0 +1,24 @@
+name: VirtualCamera
+version: "1.0.0"
+main: cn.popcraft.VirtualCameraPlugin
+api-version: "1.20"
+depend: [ProtocolLib]
+softdepend: [Vault]
+
+commands:
+  vcam:
+    description: 控制虚拟摄像机系统
+    usage: |
+      /vcam preset <start|stop> [名称]
+      /vcam sequence <start|stop> [名称]
+      /vcam random <start|stop> [名称]
+      /vcam add <名称> [过渡时间]
+    permission: virtualcamera.use
+
+permissions:
+  virtualcamera.use:
+    description: 允许使用虚拟摄像机命令
+    default: op
+  virtualcamera.admin:
+    description: 允许管理虚拟摄像机配置
+    default: op

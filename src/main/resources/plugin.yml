@@ -1,0 +1,47 @@
+name: VirtualCamera
+version: 1.0.0
+main: cn.popcraft.VirtualCamera
+api-version: 1.16
+description: 一个虚拟相机插件，用于创建电影效果和场景展示
+author: PopCraft
+
+commands:
+  camera:
+    description: 虚拟相机主命令
+    usage: /camera <enter|exit|save|load|delete|list|play|stop|help>
+    aliases: [cam, vcam]
+    permission: virtualcamera.use
+
+permissions:
+  virtualcamera.use:
+    description: 允许使用基本相机功能
+    default: op
+  virtualcamera.preset.save:
+    description: 允许保存相机预设
+    default: op
+  virtualcamera.preset.load:
+    description: 允许加载相机预设
+    default: op
+  virtualcamera.preset.delete:
+    description: 允许删除相机预设
+    default: op
+  virtualcamera.preset.list:
+    description: 允许查看预设列表
+    default: op
+  virtualcamera.sequence.play:
+    description: 允许播放相机序列
+    default: op
+  virtualcamera.sequence.stop:
+    description: 允许停止序列播放
+    default: op
+  virtualcamera.*:
+    description: 允许使用所有相机功能
+    default: op
+    children:
+      virtualcamera.use: true
+      virtualcamera.preset.save: true
+      virtualcamera.preset.load: true
+      virtualcamera.preset.delete: true
+      virtualcamera.preset.list: true
+      virtualcamera.sequence.play: true
+      virtualcamera.sequence.stop: true
