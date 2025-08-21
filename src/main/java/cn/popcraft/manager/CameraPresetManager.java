@@ -2,6 +2,7 @@ package cn.popcraft.manager;
 
 import cn.popcraft.VirtualCamera;
 import cn.popcraft.model.CameraPreset;
+import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 
@@ -38,12 +39,11 @@ public class CameraPresetManager {
                 String worldName = config.getString(path + "world");
 
                 CameraPreset preset = new CameraPreset(name);
-                preset.setX(x);
-                preset.setY(y);
-                preset.setZ(z);
-                preset.setYaw(yaw);
-                preset.setPitch(pitch);
-                preset.setWorldName(worldName);
+                Location location = new Location(
+                    plugin.getPlugin().getServer().getWorld(worldName),
+                    x, y, z, yaw, pitch
+                );
+                preset.addLocation(location);
 
                 presets.put(name, preset);
             }
@@ -59,12 +59,17 @@ public class CameraPresetManager {
         
         FileConfiguration config = plugin.getPlugin().getConfig();
         String path = "presets." + preset.getName() + ".";
-        config.set(path + "x", preset.getX());
-        config.set(path + "y", preset.getY());
-        config.set(path + "z", preset.getZ());
-        config.set(path + "yaw", preset.getYaw());
-        config.set(path + "pitch", preset.getPitch());
-        config.set(path + "world", preset.getWorldName());
+        
+        // 获取预设的第一个位置信息
+        if (!preset.getLocations().isEmpty()) {
+            Location location = preset.getLocations().get(0);
+            config.set(path + "x", location.getX());
+            config.set(path + "y", location.getY());
+            config.set(path + "z", location.getZ());
+            config.set(path + "yaw", location.getYaw());
+            config.set(path + "pitch", location.getPitch());
+            config.set(path + "world", location.getWorld().getName());
+        }
         
         plugin.getPlugin().saveConfig();
     }

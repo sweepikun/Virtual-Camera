@@ -4,16 +4,19 @@ import cn.popcraft.VirtualCamera;
 import cn.popcraft.model.Camera;
 import cn.popcraft.model.CameraPreset;
 import cn.popcraft.model.CameraSequence;
-import cn.popcraft.model.CameraType;
 import cn.popcraft.session.CameraSession;
 import cn.popcraft.session.SessionManager;
+import cn.popcraft.util.Timeline; // 添加Timeline导入
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -67,25 +70,29 @@ public class CameraManager {
             enterCameraMode(player);
         }
         
-        // 设置路径点(使用玩家当前世界)
-        List<Location> pathPoints = new ArrayList<>();
+        // 构建时间轴
+        Timeline timeline = new Timeline();
+        
+        // 添加路径点(使用玩家当前世界)
         for (Location loc : preset.getLocations()) {
             Location newLoc = loc.clone();
             newLoc.setWorld(player.getWorld());
-            pathPoints.add(newLoc);
+            timeline.addKeyframe(newLoc);
         }
         
-        // 创建相机实例(使用第一个位置点)
-        Camera camera = new Camera(pathPoints.get(0));
-        camera.setType(preset.getType());
-        session.setCamera(camera);
+        // 添加文本动作
+        for (CameraPreset.TextAction text : preset.getTexts()) {
+            timeline.addTextAction(text.getDelay(), text);
+        }
         
-        // 应用相机效果
-        applyCamera(player, camera);
+        // 添加命令动作
+        for (CameraPreset.CommandAction cmd : preset.getCommands()) {
+            timeline.addCommandAction(cmd.getDelay(), cmd);
+        }
         
-        // 调度命令和文本
-        scheduleCommands(player, preset);
-        scheduleTexts(player, preset);
+        // 设置时间轴并启动动画
+        session.setTimeline(timeline);
+        session.startAnimation();
         
         return true;
     }
@@ -97,10 +104,44 @@ public class CameraManager {
      */
     private void scheduleCommands(Player player, CameraPreset preset) {
         for (CameraPreset.CommandAction cmd : preset.getCommands()) {
+            long delayMs = cmd.getDelay();
+            long ticks = delayMs / 50;
+            long safeTicks = ticks;
+            if (safeTicks <= Integer.MAX_VALUE) {
+                Bukkit.getScheduler().runTaskLater(
+                    plugin.getPlugin(),
+                    () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.getCommand()),
+                    safeTicks
+                );
+            } else {
+                // 对于超大延迟，分段执行
+                Bukkit.getScheduler().runTaskLater(
+                    plugin.getPlugin(),
+                    () -> scheduleCommandWithDelay(cmd.getCommand(), safeTicks - Integer.MAX_VALUE),
+                    Integer.MAX_VALUE
+                );
+            }
+        }
+    }
+    
+    /**
+     * 处理超大延迟的命令执行
+     * @param command 要执行的命令
+     * @param remainingTicks 剩余的tick数
+     */
+    private void scheduleCommandWithDelay(String command, long remainingTicks) {
+        if (remainingTicks <= Integer.MAX_VALUE) {
             Bukkit.getScheduler().runTaskLater(
                 plugin.getPlugin(),
-                () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), cmd.getCommand()),
-                cmd.getDelay() / 50
+                () -> Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command),
+                remainingTicks
+            );
+        } else {
+            // 继续分段执行
+            Bukkit.getScheduler().runTaskLater(
+                plugin.getPlugin(),
+                () -> scheduleCommandWithDelay(command, remainingTicks - Integer.MAX_VALUE),
+                Integer.MAX_VALUE
             );
         }
     }
@@ -112,10 +153,97 @@ public class CameraManager {
      */
     private void scheduleTexts(Player player, CameraPreset preset) {
         for (CameraPreset.TextAction text : preset.getTexts()) {
+            long delayMs = text.getDelay();
+            long ticks = delayMs / 50;
+            long safeTicks = ticks;
+            
+            if (safeTicks <= Integer.MAX_VALUE) {
+                Bukkit.getScheduler().runTaskLater(
+                    plugin.getPlugin(),
+                    () -> scheduleTextDisplay(player, text),
+                    safeTicks
+                );
+            } else {
+                // 对于超大延迟，分段执行
+                Bukkit.getScheduler().runTaskLater(
+                    plugin.getPlugin(),
+                    () -> scheduleTextWithDelay(player, text, safeTicks - Integer.MAX_VALUE),
+                    Integer.MAX_VALUE
+                );
+            }
+        }
+    }
+    
+    /**
+     * 处理超大延迟的文本显示
+     * @param player 玩家
+     * @param text 文本动作
+     * @param remainingTicks 剩余的tick数
+     */
+    private void scheduleTextWithDelay(Player player, CameraPreset.TextAction text, long remainingTicks) {
+        if (remainingTicks <= Integer.MAX_VALUE) {
             Bukkit.getScheduler().runTaskLater(
                 plugin.getPlugin(),
-                () -> player.sendActionBar(org.bukkit.ChatColor.translateAlternateColorCodes('&', text.getText())),
-                text.getDelay() / 50
+                () -> scheduleTextDisplay(player, text),
+                remainingTicks
+            );
+        } else {
+            // 继续分段执行
+            Bukkit.getScheduler().runTaskLater(
+                plugin.getPlugin(),
+                () -> scheduleTextWithDelay(player, text, remainingTicks - Integer.MAX_VALUE),
+                Integer.MAX_VALUE
+            );
+        }
+    }
+    
+    /**
+     * 显示文本并处理持续时间
+     * @param player 玩家
+     * @param text 文本动作
+     */
+    private void scheduleTextDisplay(Player player, CameraPreset.TextAction text) {
+        player.sendActionBar(org.bukkit.ChatColor.translateAlternateColorCodes('&', text.getText()));
+        // 如果设置了持续时间，调度文本消失
+        if (text.getDuration() > 0) {
+            long durationTicks = text.getDuration() / 50;
+            long safeDurationTicks = durationTicks;
+            
+            if (safeDurationTicks <= Integer.MAX_VALUE) {
+                Bukkit.getScheduler().runTaskLater(
+                    plugin.getPlugin(),
+                    () -> player.sendActionBar(""),
+                    safeDurationTicks
+                );
+            } else {
+                // 对于超大持续时间，分段执行
+                Bukkit.getScheduler().runTaskLater(
+                    plugin.getPlugin(),
+                    () -> scheduleClearActionBar(player, safeDurationTicks - Integer.MAX_VALUE),
+                    Integer.MAX_VALUE
+                );
+            }
+        }
+    }
+    
+    /**
+     * 处理超大延迟的清除动作栏
+     * @param player 玩家
+     * @param remainingTicks 剩余的tick数
+     */
+    private void scheduleClearActionBar(Player player, long remainingTicks) {
+        if (remainingTicks <= Integer.MAX_VALUE) {
+            Bukkit.getScheduler().runTaskLater(
+                plugin.getPlugin(),
+                () -> player.sendActionBar(""),
+                remainingTicks
+            );
+        } else {
+            // 继续分段执行
+            Bukkit.getScheduler().runTaskLater(
+                plugin.getPlugin(),
+                () -> scheduleClearActionBar(player, remainingTicks - Integer.MAX_VALUE),
+                Integer.MAX_VALUE
             );
         }
     }
@@ -135,7 +263,7 @@ public class CameraManager {
                     CameraPreset preset = new CameraPreset(presetName);
                     
                     // 加载相机类型
-                    CameraType type = CameraType.valueOf(presetSection.getString("type", "NORMAL"));
+                    CameraPreset.CameraType type = CameraPreset.CameraType.valueOf(presetSection.getString("type", "NORMAL"));
                     preset.setType(type);
                     
                     // 加载位置点
@@ -179,7 +307,7 @@ public class CameraManager {
                             if (textSection != null) {
                                 String text = textSection.getString("text");
                                 long delay = textSection.getLong("delay");
-                                long duration = textSection.getLong("duration");
+                                long duration = textSection.getLong("duration", 3000); // 默认持续3秒
                                 if (text != null) {
                                     preset.addText(text, delay, duration);
                                 }
@@ -211,7 +339,7 @@ public class CameraManager {
                             ConfigurationSection entrySection = entriesSection.getConfigurationSection(entryKey);
                             if (entrySection != null) {
                                 String presetName = entrySection.getString("preset");
-                                int duration = entrySection.getInt("duration", 5);
+                                double duration = entrySection.getDouble("duration", 5.0);
                                 
                                 if (presetName != null && presets.containsKey(presetName)) {
                                     sequence.addEntry(presetName, duration);
@@ -406,12 +534,15 @@ public class CameraManager {
         // 从当前相机创建预设
         Camera camera = session.getCamera();
         CameraPreset preset = new CameraPreset(presetName);
-        preset.setX(camera.getX());
-        preset.setY(camera.getY());
-        preset.setZ(camera.getZ());
-        preset.setYaw(camera.getYaw());
-        preset.setPitch(camera.getPitch());
-        preset.setWorldName(player.getWorld().getName());
+        Location location = new Location(
+            player.getWorld(),
+            camera.getX(),
+            camera.getY(),
+            camera.getZ(),
+            camera.getYaw(),
+            camera.getPitch()
+        );
+        preset.addLocation(location);
         preset.setType(camera.getType());
         
         // 保存预设
@@ -442,12 +573,29 @@ public class CameraManager {
             enterCameraMode(player);
         }
         
-        // 创建相机实例
-        Camera camera = new Camera(preset);
-        session.setCamera(camera);
+        // 构建时间轴
+        Timeline timeline = new Timeline();
         
-        // 应用相机效果
-        applyCamera(player, camera);
+        // 添加路径点(使用玩家当前世界)
+        for (Location loc : preset.getLocations()) {
+            Location newLoc = loc.clone();
+            newLoc.setWorld(player.getWorld());
+            timeline.addKeyframe(newLoc);
+        }
+        
+        // 添加文本动作
+        for (CameraPreset.TextAction text : preset.getTexts()) {
+            timeline.addTextAction(text.getDelay(), text);
+        }
+        
+        // 添加命令动作
+        for (CameraPreset.CommandAction cmd : preset.getCommands()) {
+            timeline.addCommandAction(cmd.getDelay(), cmd);
+        }
+        
+        // 设置时间轴并启动动画
+        session.setTimeline(timeline);
+        session.startAnimation();
         
         return true;
     }
@@ -518,6 +666,7 @@ public class CameraManager {
             private int currentIndex = 0;
             private long startTime = System.currentTimeMillis();
             private CameraPreset currentPreset = null;
+            private long currentDuration = 0; // 当前预设的持续时间(毫秒)
             
             @Override
             public void run() {
@@ -526,7 +675,7 @@ public class CameraManager {
                 
                 // 如果是第一次运行或者需要切换到下一个预设
                 if (currentPreset == null || 
-                    (currentTime - startTime) / 1000.0 >= sequence.getEntry(currentIndex).getDuration()) {
+                    (currentTime - startTime) >= currentDuration) {
                     
                     // 更新开始时间
                     startTime = currentTime;
@@ -535,11 +684,12 @@ public class CameraManager {
                     String presetName = sequence.getEntry(currentIndex).getPresetName();
                     currentPreset = presets.get(presetName);
                     
+                    // 设置当前预设的持续时间(转换为毫秒)
+                    currentDuration = (long) (sequence.getEntry(currentIndex).getDuration() * 1000);
+                    
                     // 应用当前预设
                     if (currentPreset != null) {
-                        Camera camera = new Camera(currentPreset);
-                        session.setCamera(camera);
-                        applyCamera(player, camera);
+                        switchToPreset(player, presetName);
                     }
                     
                     // 移动到下一个预设
@@ -574,6 +724,9 @@ public class CameraManager {
         if (task != null) {
             task.cancel();
         }
+        // 停止当前动画
+        CameraSession session = sessionManager.getSession(player);
+        session.stopAnimation();
     }
 
     /**

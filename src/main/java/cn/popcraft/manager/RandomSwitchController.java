@@ -8,15 +8,17 @@ import org.bukkit.scheduler.BukkitTask;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 
 public class RandomSwitchController {
     private final VirtualCamera plugin;
     private final Map<UUID, BukkitTask> activeTasks;
-    private final Map<UUID, List<String>> playerPresetPools;
+    private final Map<UUID, Set<String>> playerPresetPools;
     private final Map<UUID, Integer> switchIntervals;
     private final Random random;
 
@@ -56,7 +58,7 @@ public class RandomSwitchController {
             return false;
         }
 
-        playerPresetPools.put(playerId, validPresets);
+        playerPresetPools.put(playerId, new HashSet<>(validPresets));
         switchIntervals.put(playerId, intervalTicks);
 
         // 立即切换到随机预设
@@ -83,6 +85,21 @@ public class RandomSwitchController {
 
         return true;
     }
+    
+    /**
+     * 开始随机切换预设（使用玩家预设池）
+     * @param player 玩家
+     * @param intervalTicks 切换间隔（游戏刻）
+     * @return 是否成功启动随机切换
+     */
+    public boolean startRandomSwitch(Player player, int intervalTicks) {
+        Set<String> presetPool = playerPresetPools.get(player.getUniqueId());
+        if (presetPool == null || presetPool.isEmpty()) {
+            return false;
+        }
+        
+        return startRandomSwitch(player, new ArrayList<>(presetPool), intervalTicks);
+    }
 
     /**
      * 获取随机预设
@@ -91,11 +108,12 @@ public class RandomSwitchController {
      */
     private String getRandomPreset(Player player) {
         UUID playerId = player.getUniqueId();
-        List<String> presets = playerPresetPools.get(playerId);
+        Set<String> presets = playerPresetPools.get(playerId);
         if (presets == null || presets.isEmpty()) {
             return null;
         }
-        return presets.get(random.nextInt(presets.size()));
+        List<String> presetList = new ArrayList<>(presets);
+        return presetList.get(random.nextInt(presetList.size()));
     }
 
     /**
@@ -127,7 +145,36 @@ public class RandomSwitchController {
      * @return 预设名称列表，如果不在随机切换中则返回null
      */
     public List<String> getPlayerPresetPool(Player player) {
-        return playerPresetPools.get(player.getUniqueId());
+        Set<String> presetPool = playerPresetPools.get(player.getUniqueId());
+        return presetPool != null ? new ArrayList<>(presetPool) : null;
+    }
+    
+    /**
+     * 获取玩家的预设池
+     * @param player 玩家
+     * @return 预设池
+     */
+    public Set<String> getPresetPool(Player player) {
+        UUID uuid = player.getUniqueId();
+        return playerPresetPools.computeIfAbsent(uuid, k -> new HashSet<>());
+    }
+    
+    /**
+     * 向预设池中添加预设
+     * @param player 玩家
+     * @param preset 预设名称
+     */
+    public void addPresetToPool(Player player, String preset) {
+        getPresetPool(player).add(preset);
+    }
+    
+    /**
+     * 从预设池中移除预设
+     * @param player 玩家
+     * @param preset 预设名称
+     */
+    public void removePresetFromPool(Player player, String preset) {
+        getPresetPool(player).remove(preset);
     }
 
     /**

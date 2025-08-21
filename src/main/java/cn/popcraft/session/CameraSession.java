@@ -2,6 +2,7 @@ package cn.popcraft.session;
 
 import cn.popcraft.model.Camera;
 import cn.popcraft.model.CameraPreset;
+import cn.popcraft.util.Timeline;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
@@ -23,9 +24,14 @@ public class CameraSession {
     private boolean ignoreNextMove;
     
     // 新增字段
-    private List<Location> pathPoints = new ArrayList<>();
+    private Timeline timeline;
     private List<BukkitTask> scheduledTasks = new ArrayList<>();
+    private BukkitTask animationTask;
     private long startTime;
+    private boolean isPlaying;
+    
+    // 为兼容性保留的字段
+    private List<Location> pathPoints = new ArrayList<>();
     private long duration;
     private int currentPointIndex;
 
@@ -39,6 +45,8 @@ public class CameraSession {
         this.originalLocation = null;
         this.inCameraMode = false;
         this.ignoreNextMove = false;
+        this.timeline = new Timeline();
+        this.isPlaying = false;
     }
 
     /**
@@ -151,13 +159,13 @@ public class CameraSession {
     public void enterCameraMode() {
         if (!inCameraMode) {
             // 保存玩家的原始位置
-            originalLocation = player.getLocation().clone();
+            Location location = player.getLocation();
+            originalLocation = location.clone();
             
             // 更新相机位置为玩家当前位置
-            activeCamera.updateCamera(
-                originalLocation.clone(),
-                originalLocation.getYaw(),
-                originalLocation.getPitch()
+            activeCamera.updateCamera(location.clone(),
+                    location.getYaw(),
+                    location.getPitch()
             );
             
             inCameraMode = true;
@@ -169,6 +177,9 @@ public class CameraSession {
      */
     public void exitCameraMode() {
         if (inCameraMode) {
+            // 停止任何正在进行的动画
+            stopAnimation();
+            
             // 如果有保存的原始位置，将玩家传送回去
             if (originalLocation != null) {
                 player.teleport(originalLocation);
@@ -196,6 +207,95 @@ public class CameraSession {
             newLocation.setPitch(pitch);
             player.teleport(newLocation);
         }
+    }
+
+    /**
+     * 设置相机时间轴
+     * @param timeline 时间轴
+     */
+    public void setTimeline(Timeline timeline) {
+        this.timeline = timeline;
+    }
+
+    /**
+     * 启动相机动画
+     */
+    public void startAnimation() {
+        if (timeline.isEmpty()) return;
+        
+        stopAnimation(); // 停止任何正在进行的动画
+        
+        this.startTime = System.currentTimeMillis();
+        this.isPlaying = true;
+        
+        // 创建动画任务
+        animationTask = Bukkit.getScheduler().runTaskTimer(
+                Bukkit.getPluginManager().getPlugin("VirtualCamera"),
+                this::updateAnimation,
+                1L, 1L // 每tick更新一次
+        );
+    }
+
+    /**
+     * 更新动画状态
+     */
+    private void updateAnimation() {
+        if (!isPlaying) return;
+        
+        long elapsed = System.currentTimeMillis() - startTime;
+        
+        // 更新相机位置
+        Location location = timeline.getLocationAt(elapsed);
+        if (location != null) {
+            updateCamera(location, location.getYaw(), location.getPitch());
+        }
+        
+        // 检查并执行文本动作
+        List<CameraPreset.TextAction> textActions = timeline.getTextActionsAt(elapsed, 50); // 50ms检查间隔
+        for (CameraPreset.TextAction action : textActions) {
+            player.sendActionBar(ChatColor.translateAlternateColorCodes('&', action.getText()));
+            
+            // 如果设置了持续时间，调度清除动作
+            if (action.getDuration() > 0) {
+                Bukkit.getScheduler().runTaskLater(
+                        Bukkit.getPluginManager().getPlugin("VirtualCamera"),
+                        () -> player.sendActionBar(""),
+                        action.getDuration() / 50
+                );
+            }
+        }
+        
+        // 检查并执行命令动作
+        List<CameraPreset.CommandAction> commandActions = timeline.getCommandActionsAt(elapsed, 50); // 50ms检查间隔
+        for (CameraPreset.CommandAction action : commandActions) {
+            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), action.getCommand());
+        }
+        
+        // 检查是否已完成
+        if (elapsed >= timeline.getTotalDuration()) {
+            stopAnimation();
+        }
+    }
+
+    /**
+     * 停止动画
+     */
+    public void stopAnimation() {
+        isPlaying = false;
+        if (animationTask != null && !animationTask.isCancelled()) {
+            animationTask.cancel();
+            animationTask = null;
+        }
+        // 清除动作栏
+        player.sendActionBar("");
+    }
+
+    /**
+     * 检查动画是否正在播放
+     * @return 是否正在播放
+     */
+    public boolean isPlaying() {
+        return isPlaying;
     }
 
     /**
@@ -276,7 +376,17 @@ public class CameraSession {
         for (CameraPreset.TextAction text : preset.getTexts()) {
             BukkitTask task = Bukkit.getScheduler().runTaskLater(
                 Bukkit.getPluginManager().getPlugin("VirtualCamera"),
-                () -> player.sendActionBar(ChatColor.translateAlternateColorCodes('&', text.getText())),
+                () -> {
+                    player.sendActionBar(ChatColor.translateAlternateColorCodes('&', text.getText()));
+                    // 如果设置了持续时间，调度清除动作
+                    if (text.getDuration() > 0) {
+                        Bukkit.getScheduler().runTaskLater(
+                                Bukkit.getPluginManager().getPlugin("VirtualCamera"),
+                                () -> player.sendActionBar(""),
+                                text.getDuration() / 50
+                        );
+                    }
+                },
                 text.getDelay() / 50
             );
             scheduledTasks.add(task);
@@ -293,6 +403,8 @@ public class CameraSession {
             }
         });
         scheduledTasks.clear();
+        
+        stopAnimation();
     }
 
     /**

@@ -1,6 +1,7 @@
 package cn.popcraft.model;
 
 import org.bukkit.Location;
+import cn.popcraft.model.CameraPreset.CameraType;
 import org.bukkit.World;
 
 /**
@@ -32,12 +33,13 @@ public class Camera {
      * @param preset 预设
      */
     public Camera(CameraPreset preset) {
-        this.x = preset.getX();
-        this.y = preset.getY();
-        this.z = preset.getZ();
-        this.yaw = preset.getYaw();
-        this.pitch = preset.getPitch();
-        this.type = CameraType.NORMAL;
+        Location firstLoc = preset.getLocations().get(0);
+        this.x = firstLoc.getX();
+        this.y = firstLoc.getY();
+        this.z = firstLoc.getZ();
+        this.yaw = firstLoc.getYaw();
+        this.pitch = firstLoc.getPitch();
+        this.type = preset.getType();
     }
 
     /**

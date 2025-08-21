@@ -1,39 +1,55 @@
 package cn.popcraft.model;
 
-import org.bukkit.Bukkit;
 import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * 摄像机预设位置
- */
 public class CameraPreset {
     private final String name;
-    private List<Location> locations = new ArrayList<>();
+    private final List<Location> locations = new ArrayList<>();
+    private final List<CommandAction> commands = new ArrayList<>();
+    private final List<TextAction> texts = new ArrayList<>();
     private CameraType type = CameraType.NORMAL;
-    private List<CommandAction> commands = new ArrayList<>();
-    private List<TextAction> texts = new ArrayList<>();
+
+    public CameraPreset(String name) {
+        this.name = name;
+    }
+
+    public enum CameraType {
+        NORMAL,
+        SPECTATOR,
+        CINEMATIC
+    }
 
     public static class CommandAction {
-        private String command;
-        private long delay; // 毫秒
+        private final String command;
+        private final long delay; // 毫秒
 
         public CommandAction(String command, long delay) {
             this.command = command;
             this.delay = delay;
         }
 
-        // getters and setters
+        public String getCommand() {
+            return command;
+        }
+
+        public long getDelay() {
+            return delay;
+        }
     }
 
     public static class TextAction {
-        private String text;
-        private long delay; // 毫秒
-        private long duration; // 毫秒
+        private final String text;
+        private final long delay; // 毫秒
+        private long duration; // 文本显示持续时间(毫秒)
+
+        public TextAction(String text, long delay) {
+            this.text = text;
+            this.delay = delay;
+            this.duration = 3000; // 默认持续3秒
+        }
 
         public TextAction(String text, long delay, long duration) {
             this.text = text;
@@ -41,16 +57,21 @@ public class CameraPreset {
             this.duration = duration;
         }
 
-        // getters and setters
-    }
+        public String getText() {
+            return text;
+        }
 
-    public CameraPreset(String name) {
-        this.name = name;
-    }
+        public long getDelay() {
+            return delay;
+        }
 
-    public CameraPreset(String name, Location location) {
-        this.name = name;
-        this.locations.add(location);
+        public long getDuration() {
+            return duration;
+        }
+
+        public void setDuration(long duration) {
+            this.duration = duration;
+        }
     }
 
     public String getName() {
@@ -58,23 +79,16 @@ public class CameraPreset {
     }
 
     public List<Location> getLocations() {
-        return locations;
+        return new ArrayList<>(locations);
     }
 
-    public void addLocation(Location location) {
-        this.locations.add(location);
-    }
-
-    public void removeLocation(int index) {
-        this.locations.remove(index);
-    }
-
-    public Location getFirstLocation() {
-        return locations.isEmpty() ? null : locations.get(0);
+    public void setLocations(List<Location> locations) {
+        this.locations.clear();
+        this.locations.addAll(locations);
     }
 
     public List<CommandAction> getCommands() {
-        return commands;
+        return new ArrayList<>(commands);
     }
 
     public void addCommand(String command, long delay) {
@@ -82,7 +96,11 @@ public class CameraPreset {
     }
 
     public List<TextAction> getTexts() {
-        return texts;
+        return new ArrayList<>(texts);
+    }
+
+    public void addText(String text, long delay) {
+        this.texts.add(new TextAction(text, delay));
     }
 
     public void addText(String text, long delay, long duration) {
@@ -97,73 +115,91 @@ public class CameraPreset {
         this.type = type;
     }
 
-    @Override
-    public String toString() {
-        return String.format("CameraPreset{name='%s', locations=%s, commands=%s, texts=%s, type=%s}",
-                name, locations.size(), commands.size(), texts.size(), type);
+    /**
+     * 验证预设是否有效
+     */
+    public boolean isValid() {
+        return !locations.isEmpty();
     }
 
-    // CommandAction getters/setters
-    public static class CommandAction {
-        private String command;
-        private long delay;
-
-        public CommandAction(String command, long delay) {
-            this.command = command;
-            this.delay = delay;
-        }
-
-        public String getCommand() {
-            return command;
-        }
-
-        public void setCommand(String command) {
-            this.command = command;
-        }
-
-        public long getDelay() {
-            return delay;
-        }
-
-        public void setDelay(long delay) {
-            this.delay = delay;
-        }
+    /**
+     * 添加多个位置点
+     */
+    public void addLocation(Location location) {
+        this.locations.add(location);
     }
 
-    // TextAction getters/setters
-    public static class TextAction {
-        private String text;
-        private long delay;
-        private long duration;
+    public void addLocations(List<Location> locations) {
+        this.locations.addAll(locations);
+    }
 
-        public TextAction(String text, long delay, long duration) {
-            this.text = text;
-            this.delay = delay;
-            this.duration = duration;
-        }
+    /**
+     * 添加多个命令
+     */
+    public void addCommands(List<CommandAction> commands) {
+        this.commands.addAll(commands);
+    }
 
-        public String getText() {
-            return text;
-        }
+    /**
+     * 添加多个文本
+     */
+    public void addTexts(List<TextAction> texts) {
+        this.texts.addAll(texts);
+    }
 
-        public void setText(String text) {
-            this.text = text;
-        }
+    /**
+     * 清除所有位置点
+     */
+    public void clearLocations() {
+        this.locations.clear();
+    }
 
-        public long getDelay() {
-            return delay;
-        }
+    /**
+     * 清除所有命令
+     */
+    public void clearCommands() {
+        this.commands.clear();
+    }
 
-        public void setDelay(long delay) {
-            this.delay = delay;
-        }
+    /**
+     * 清除所有文本
+     */
+    public void clearTexts() {
+        this.texts.clear();
+    }
 
-        public long getDuration() {
-            return duration;
-        }
+    /**
+     * 获取第一个位置点
+     */
+    public Location getFirstLocation() {
+        return locations.isEmpty() ? null : locations.get(0);
+    }
 
-        public void setDuration(long duration) {
-            this.duration = duration;
-        }
+    /**
+     * 获取最后一个位置点
+     */
+    public Location getLastLocation() {
+        return locations.isEmpty() ? null : locations.get(locations.size() - 1);
+    }
+
+    /**
+     * 获取位置点数量
+     */
+    public int getLocationCount() {
+        return locations.size();
+    }
+
+    /**
+     * 获取命令数量
+     */
+    public int getCommandCount() {
+        return commands.size();
+    }
+
+    /**
+     * 获取文本数量
+     */
+    public int getTextCount() {
+        return texts.size();
     }
 }

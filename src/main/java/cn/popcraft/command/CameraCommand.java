@@ -2,6 +2,7 @@ package cn.popcraft.command;
 
 import cn.popcraft.VirtualCameraPlugin;
 import cn.popcraft.manager.CameraManager;
+import cn.popcraft.manager.RandomSwitchController;
 import cn.popcraft.model.CameraPreset;
 import cn.popcraft.model.CameraSequence;
 import cn.popcraft.session.CameraSession;
@@ -12,6 +13,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,11 +23,13 @@ public class CameraCommand implements CommandExecutor {
     private final VirtualCameraPlugin plugin;
     private final SessionManager sessionManager;
     private final CameraManager cameraManager;
+    private final RandomSwitchController randomController;
 
     public CameraCommand(VirtualCameraPlugin plugin, SessionManager sessionManager, CameraManager cameraManager) {
         this.plugin = plugin;
         this.sessionManager = sessionManager;
         this.cameraManager = cameraManager;
+        this.randomController = plugin.getRandomController();
     }
 
     @Override
@@ -93,6 +97,14 @@ public class CameraCommand implements CommandExecutor {
 
             case "help":
                 sendHelp(player);
+                break;
+                
+            case "random":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "请指定随机切换操作！");
+                    return true;
+                }
+                handleRandom(player, args);
                 break;
 
             default:
@@ -267,6 +279,147 @@ public class CameraCommand implements CommandExecutor {
         player.sendMessage(ChatColor.GRAY + "/camera list" + ChatColor.WHITE + " - 列出所有预设和序列");
         player.sendMessage(ChatColor.GRAY + "/camera play <序列>" + ChatColor.WHITE + " - 播放相机序列");
         player.sendMessage(ChatColor.GRAY + "/camera stop" + ChatColor.WHITE + " - 停止序列播放");
+        player.sendMessage(ChatColor.GRAY + "/camera random start <时间>" + ChatColor.WHITE + " - 开始随机切换预设");
+        player.sendMessage(ChatColor.GRAY + "/camera random stop" + ChatColor.WHITE + " - 停止随机切换预设");
+        player.sendMessage(ChatColor.GRAY + "/camera random add <名称>" + ChatColor.WHITE + " - 添加预设到随机切换池");
+        player.sendMessage(ChatColor.GRAY + "/camera random remove <名称>" + ChatColor.WHITE + " - 从随机切换池中移除预设");
+        player.sendMessage(ChatColor.GRAY + "/camera random list" + ChatColor.WHITE + " - 列出随机切换池中的预设");
         player.sendMessage(ChatColor.GRAY + "/camera help" + ChatColor.WHITE + " - 显示此帮助信息");
+    }
+    
+    /**
+     * 处理随机切换相关命令
+     */
+    private void handleRandom(Player player, String[] args) {
+        if (args.length < 2) {
+            player.sendMessage(ChatColor.RED + "请指定随机切换操作！");
+            return;
+        }
+        
+        String operation = args[1].toLowerCase();
+        
+        switch (operation) {
+            case "start":
+                if (!player.hasPermission("virtualcamera.random.start")) {
+                    player.sendMessage(ChatColor.RED + "你没有权限开始随机切换！");
+                    return;
+                }
+                
+                if (args.length < 3) {
+                    player.sendMessage(ChatColor.RED + "请指定切换间隔！");
+                    return;
+                }
+                
+                try {
+                    int interval = Integer.parseInt(args[2]);
+                    if (interval <= 0) {
+                        player.sendMessage(ChatColor.RED + "切换间隔必须大于0！");
+                        return;
+                    }
+                    
+                    if (randomController.getPresetPool(player).isEmpty()) {
+                        player.sendMessage(ChatColor.RED + "随机切换池为空！请先添加预设。");
+                        return;
+                    }
+                    
+                    randomController.startRandomSwitch(player, interval * 20); // 转换为游戏刻
+                    player.sendMessage(ChatColor.GREEN + "已开始随机切换预设，间隔：" + interval + "秒。");
+                } catch (NumberFormatException e) {
+                    player.sendMessage(ChatColor.RED + "无效的时间间隔！请输入一个整数。");
+                }
+                break;
+                
+            case "stop":
+                if (!player.hasPermission("virtualcamera.random.stop")) {
+                    player.sendMessage(ChatColor.RED + "你没有权限停止随机切换！");
+                    return;
+                }
+                
+                if (!randomController.isInRandomSwitch(player)) {
+                    player.sendMessage(ChatColor.RED + "你没有正在进行的随机切换！");
+                    return;
+                }
+                
+                randomController.stopRandomSwitch(player);
+                player.sendMessage(ChatColor.GREEN + "已停止随机切换预设。");
+                break;
+                
+            case "add":
+                if (!player.hasPermission("virtualcamera.random.add")) {
+                    player.sendMessage(ChatColor.RED + "你没有权限添加预设到随机切换池！");
+                    return;
+                }
+                
+                if (args.length < 3) {
+                    player.sendMessage(ChatColor.RED + "请指定要添加的预设名称！");
+                    return;
+                }
+                
+                String presetToAdd = args[2];
+                // 检查预设是否存在
+                if (plugin.getPresetManager().getPreset(presetToAdd) == null) {
+                    player.sendMessage(ChatColor.RED + "预设 '" + presetToAdd + "' 不存在！");
+                    return;
+                }
+                
+                if (randomController.getPresetPool(player).contains(presetToAdd)) {
+                    player.sendMessage(ChatColor.RED + "预设 '" + presetToAdd + "' 已在随机切换池中！");
+                    return;
+                }
+                
+                randomController.addPresetToPool(player, presetToAdd);
+                player.sendMessage(ChatColor.GREEN + "已将预设 '" + presetToAdd + "' 添加到随机切换池。");
+                break;
+                
+            case "remove":
+                if (!player.hasPermission("virtualcamera.random.remove")) {
+                    player.sendMessage(ChatColor.RED + "你没有权限从随机切换池中移除预设！");
+                    return;
+                }
+                
+                if (args.length < 3) {
+                    player.sendMessage(ChatColor.RED + "请指定要移除的预设名称！");
+                    return;
+                }
+                
+                String presetToRemove = args[2];
+                if (!randomController.getPresetPool(player).contains(presetToRemove)) {
+                    player.sendMessage(ChatColor.RED + "预设 '" + presetToRemove + "' 不在随机切换池中！");
+                    return;
+                }
+                
+                randomController.removePresetFromPool(player, presetToRemove);
+                player.sendMessage(ChatColor.GREEN + "已从随机切换池中移除预设 '" + presetToRemove + "'。");
+                break;
+                
+            case "list":
+                if (!player.hasPermission("virtualcamera.random.list")) {
+                    player.sendMessage(ChatColor.RED + "你没有权限查看随机切换池！");
+                    return;
+                }
+                
+                List<String> presetPool = randomController.getPlayerPresetPool(player);
+                if (presetPool == null || presetPool.isEmpty()) {
+                    player.sendMessage(ChatColor.YELLOW + "随机切换池为空。");
+                    return;
+                }
+                
+                player.sendMessage(ChatColor.GREEN + "随机切换池中的预设：");
+                for (String presetName : presetPool) {
+                    player.sendMessage(ChatColor.GRAY + "- " + presetName);
+                }
+                
+                // 显示切换间隔
+                int intervalTicks = randomController.getSwitchInterval(player);
+                if (intervalTicks > 0) {
+                    double intervalSeconds = intervalTicks / 20.0;
+                    player.sendMessage(ChatColor.GRAY + "切换间隔: " + intervalSeconds + " 秒");
+                }
+                break;
+                
+            default:
+                player.sendMessage(ChatColor.RED + "未知的随机切换操作！使用 /camera help 查看帮助。");
+                break;
+        }
     }
 }

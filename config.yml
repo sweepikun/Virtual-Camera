@@ -1,0 +1,25 @@
+# 虚拟相机预设配置
+presets:
+  # 示例预设1 - 简单路径
+  demo_path:
+    type: NORMAL  # 相机类型(NORMAL/SPECTATOR)
+    locations:
+      - {x: 10, y: 64, z: 20, yaw: 0, pitch: 0}
+      - {x: 15, y: 65, z: 25, yaw: 90, pitch: -10}
+      - {x: 20, y: 66, z: 30, yaw: 180, pitch: -20}
+    
+    # 命令调度(可选)
+    commands:
+      - {command: "say 相机到达第一个点", delay: 0}
+      - {command: "effect give @a minecraft:glowing 10 1", delay: 1000}
+    
+    # 文本显示(可选)
+    texts:
+      - {text: "&a正在移动中...", delay: 500}
+      - {text: "&b即将到达终点", delay: 2000}
+
+  # 示例预设2 - 简单单点
+  demo_single:
+    type: SPECTATOR
+    locations:
+      - {x: 100, y: 80, z: 100, yaw: 45, pitch: -30}
