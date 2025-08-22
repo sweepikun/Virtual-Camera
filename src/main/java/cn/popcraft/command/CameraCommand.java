@@ -8,13 +8,17 @@ import cn.popcraft.model.CameraSequence;
 import cn.popcraft.session.CameraSession;
 import cn.popcraft.session.SessionManager;
 import org.bukkit.ChatColor;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 相机命令执行器
@@ -24,6 +28,9 @@ public class CameraCommand implements CommandExecutor {
     private final SessionManager sessionManager;
     private final CameraManager cameraManager;
     private final RandomSwitchController randomController;
+    
+    // 存储正在创建的预设信息
+    private final Map<UUID, PresetCreationData> presetCreationData = new HashMap<>();
 
     public CameraCommand(VirtualCameraPlugin plugin, SessionManager sessionManager, CameraManager cameraManager) {
         this.plugin = plugin;
@@ -99,6 +106,22 @@ public class CameraCommand implements CommandExecutor {
                 sendHelp(player);
                 break;
                 
+            case "create":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "请指定预设名称！");
+                    return true;
+                }
+                handleCreatePreset(player, args[1]);
+                break;
+                
+            case "addpoint":
+                handleAddPoint(player, args);
+                break;
+                
+            case "finish":
+                handleFinishPreset(player);
+                break;
+
             case "random":
                 if (args.length < 2) {
                     player.sendMessage(ChatColor.RED + "请指定随机切换操作！");
@@ -108,11 +131,123 @@ public class CameraCommand implements CommandExecutor {
                 break;
 
             default:
-                player.sendMessage(ChatColor.RED + "未知命令！使用 /camera help 查看帮助。");
+                player.sendMessage(ChatColor.RED + "未知命令！使用 /vcam help 查看帮助。");
                 break;
         }
 
         return true;
+    }
+
+    /**
+     * 处理创建预设命令
+     */
+    private void handleCreatePreset(Player player, String presetName) {
+        if (!player.hasPermission("virtualcamera.preset.create")) {
+            player.sendMessage(ChatColor.RED + "你没有权限创建预设！");
+            return;
+        }
+        
+        // 检查是否已存在同名预设
+        if (plugin.getPresetManager().getPreset(presetName) != null) {
+            player.sendMessage(ChatColor.RED + "预设 '" + presetName + "' 已存在！");
+            return;
+        }
+        
+        // 创建新的预设创建数据
+        presetCreationData.put(player.getUniqueId(), new PresetCreationData(presetName));
+        player.sendMessage(ChatColor.GREEN + "开始创建预设: " + presetName);
+        player.sendMessage(ChatColor.YELLOW + "请使用以下命令添加路径点:");
+        player.sendMessage(ChatColor.GRAY + "/vcam addpoint [运行时间(秒)] - 添加当前位置(包括角度)为路径点");
+        player.sendMessage(ChatColor.GRAY + "/vcam finish - 完成预设创建");
+        player.sendMessage(ChatColor.YELLOW + "提示: 第一个点不需要指定运行时间，每个点都会记录当前位置和角度");
+    }
+    
+    /**
+     * 处理添加路径点命令
+     */
+    private void handleAddPoint(Player player, String[] args) {
+        if (!player.hasPermission("virtualcamera.preset.create")) {
+            player.sendMessage(ChatColor.RED + "你没有权限创建预设！");
+            return;
+        }
+        
+        UUID playerId = player.getUniqueId();
+        if (!presetCreationData.containsKey(playerId)) {
+            player.sendMessage(ChatColor.RED + "你没有正在进行的预设创建任务！请先使用 /vcam create <名称> 开始创建。");
+            return;
+        }
+        
+        PresetCreationData data = presetCreationData.get(playerId);
+        Location location = player.getLocation(); // 这已经包含了玩家的相机角度 (yaw 和 pitch)
+        
+        // 如果是第一个点，不需要运行时间
+        if (data.getPoints().isEmpty()) {
+            data.addPoint(location, 0); // 第一个点运行时间为0
+            player.sendMessage(ChatColor.GREEN + "已添加起点: " + formatLocation(location));
+        } else {
+            // 需要指定运行时间
+            if (args.length < 2) {
+                player.sendMessage(ChatColor.RED + "请指定运行时间(秒)！");
+                return;
+            }
+            
+            try {
+                double duration = Double.parseDouble(args[1]);
+                if (duration < 0) {
+                    player.sendMessage(ChatColor.RED + "运行时间不能为负数！");
+                    return;
+                }
+                
+                data.addPoint(location, duration);
+                player.sendMessage(ChatColor.GREEN + "已添加路径点: " + formatLocation(location) + " (运行时间: " + duration + "秒)");
+            } catch (NumberFormatException e) {
+                player.sendMessage(ChatColor.RED + "无效的运行时间！请输入一个数字。");
+                return;
+            }
+        }
+    }
+    
+    /**
+     * 处理完成预设创建命令
+     */
+    private void handleFinishPreset(Player player) {
+        if (!player.hasPermission("virtualcamera.preset.create")) {
+            player.sendMessage(ChatColor.RED + "你没有权限创建预设！");
+            return;
+        }
+        
+        UUID playerId = player.getUniqueId();
+        if (!presetCreationData.containsKey(playerId)) {
+            player.sendMessage(ChatColor.RED + "你没有正在进行的预设创建任务！请先使用 /vcam create <名称> 开始创建。");
+            return;
+        }
+        
+        PresetCreationData data = presetCreationData.get(playerId);
+        List<Location> points = data.getPoints();
+        
+        if (points.size() < 1) {
+            player.sendMessage(ChatColor.RED + "预设至少需要一个点！");
+            return;
+        }
+        
+        // 创建预设
+        String presetName = data.getPresetName();
+        CameraPreset preset = new CameraPreset(presetName);
+        preset.setType(CameraPreset.CameraType.NORMAL); // 默认类型
+        
+        // 添加所有点
+        for (Location point : points) {
+            preset.addLocation(point);
+        }
+        
+        // 保存预设
+        plugin.getPresetManager().addPreset(presetName, preset);
+        cameraManager.saveToConfig(); // 保存到配置文件
+        
+        // 清理临时数据
+        presetCreationData.remove(playerId);
+        
+        player.sendMessage(ChatColor.GREEN + "预设 '" + presetName + "' 创建成功！共 " + points.size() + " 个路径点。");
     }
 
     /**
@@ -131,7 +266,7 @@ public class CameraCommand implements CommandExecutor {
         }
 
         cameraManager.enterCameraMode(player);
-        player.sendMessage(ChatColor.GREEN + "已进入相机模式。使用 /camera exit 退出。");
+        player.sendMessage(ChatColor.GREEN + "已进入相机模式。使用 /vcam exit 退出。");
     }
 
     /**
@@ -271,20 +406,23 @@ public class CameraCommand implements CommandExecutor {
      */
     private void sendHelp(Player player) {
         player.sendMessage(ChatColor.GREEN + "=== VirtualCamera 帮助 ===");
-        player.sendMessage(ChatColor.GRAY + "/camera enter" + ChatColor.WHITE + " - 进入相机模式");
-        player.sendMessage(ChatColor.GRAY + "/camera exit" + ChatColor.WHITE + " - 退出相机模式");
-        player.sendMessage(ChatColor.GRAY + "/camera save <名称>" + ChatColor.WHITE + " - 保存当前相机位置为预设");
-        player.sendMessage(ChatColor.GRAY + "/camera load <名称>" + ChatColor.WHITE + " - 加载预设");
-        player.sendMessage(ChatColor.GRAY + "/camera delete <名称>" + ChatColor.WHITE + " - 删除预设");
-        player.sendMessage(ChatColor.GRAY + "/camera list" + ChatColor.WHITE + " - 列出所有预设和序列");
-        player.sendMessage(ChatColor.GRAY + "/camera play <序列>" + ChatColor.WHITE + " - 播放相机序列");
-        player.sendMessage(ChatColor.GRAY + "/camera stop" + ChatColor.WHITE + " - 停止序列播放");
-        player.sendMessage(ChatColor.GRAY + "/camera random start <时间>" + ChatColor.WHITE + " - 开始随机切换预设");
-        player.sendMessage(ChatColor.GRAY + "/camera random stop" + ChatColor.WHITE + " - 停止随机切换预设");
-        player.sendMessage(ChatColor.GRAY + "/camera random add <名称>" + ChatColor.WHITE + " - 添加预设到随机切换池");
-        player.sendMessage(ChatColor.GRAY + "/camera random remove <名称>" + ChatColor.WHITE + " - 从随机切换池中移除预设");
-        player.sendMessage(ChatColor.GRAY + "/camera random list" + ChatColor.WHITE + " - 列出随机切换池中的预设");
-        player.sendMessage(ChatColor.GRAY + "/camera help" + ChatColor.WHITE + " - 显示此帮助信息");
+        player.sendMessage(ChatColor.GRAY + "/vcam enter" + ChatColor.WHITE + " - 进入相机模式");
+        player.sendMessage(ChatColor.GRAY + "/vcam exit" + ChatColor.WHITE + " - 退出相机模式");
+        player.sendMessage(ChatColor.GRAY + "/vcam save <名称>" + ChatColor.WHITE + " - 保存当前相机位置为预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam load <名称>" + ChatColor.WHITE + " - 加载预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam delete <名称>" + ChatColor.WHITE + " - 删除预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam list" + ChatColor.WHITE + " - 列出所有预设和序列");
+        player.sendMessage(ChatColor.GRAY + "/vcam play <序列>" + ChatColor.WHITE + " - 播放相机序列");
+        player.sendMessage(ChatColor.GRAY + "/vcam stop" + ChatColor.WHITE + " - 停止序列播放");
+        player.sendMessage(ChatColor.GRAY + "/vcam create <名称>" + ChatColor.WHITE + " - 创建多点相机预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam addpoint [时间]" + ChatColor.WHITE + " - 添加当前点为路径点");
+        player.sendMessage(ChatColor.GRAY + "/vcam finish" + ChatColor.WHITE + " - 完成预设创建");
+        player.sendMessage(ChatColor.GRAY + "/vcam random start <时间>" + ChatColor.WHITE + " - 开始随机切换预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam random stop" + ChatColor.WHITE + " - 停止随机切换预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam random add <名称>" + ChatColor.WHITE + " - 添加预设到随机切换池");
+        player.sendMessage(ChatColor.GRAY + "/vcam random remove <名称>" + ChatColor.WHITE + " - 从随机切换池中移除预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam random list" + ChatColor.WHITE + " - 列出随机切换池中的预设");
+        player.sendMessage(ChatColor.GRAY + "/vcam help" + ChatColor.WHITE + " - 显示此帮助信息");
     }
     
     /**
@@ -418,8 +556,49 @@ public class CameraCommand implements CommandExecutor {
                 break;
                 
             default:
-                player.sendMessage(ChatColor.RED + "未知的随机切换操作！使用 /camera help 查看帮助。");
+                player.sendMessage(ChatColor.RED + "未知的随机切换操作！使用 /vcam help 查看帮助。");
                 break;
+        }
+    }
+    
+    /**
+     * 格式化位置信息
+     */
+    private String formatLocation(Location location) {
+        return String.format("x:%.2f, y:%.2f, z:%.2f, yaw:%.2f, pitch:%.2f", 
+                location.getX(), location.getY(), location.getZ(), 
+                location.getYaw(), location.getPitch());
+    }
+    
+    /**
+     * 预设创建数据类
+     */
+    private static class PresetCreationData {
+        private final String presetName;
+        private final List<Location> points;
+        private final List<Double> durations; // 每个点到下一个点的运行时间
+        
+        public PresetCreationData(String presetName) {
+            this.presetName = presetName;
+            this.points = new ArrayList<>();
+            this.durations = new ArrayList<>();
+        }
+        
+        public void addPoint(Location location, double duration) {
+            points.add(location.clone());
+            durations.add(duration);
+        }
+        
+        public String getPresetName() {
+            return presetName;
+        }
+        
+        public List<Location> getPoints() {
+            return new ArrayList<>(points);
+        }
+        
+        public List<Double> getDurations() {
+            return new ArrayList<>(durations);
         }
     }
 }

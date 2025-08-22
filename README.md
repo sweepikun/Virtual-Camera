@@ -32,6 +32,9 @@ Virtual-Camera 是一个功能强大的 Minecraft 插件，为服务器管理员
 - `/vcam list` - 列出所有预设和序列
 - `/vcam play <序列>` - 播放相机序列
 - `/vcam stop` - 停止序列播放
+- `/vcam create <名称>` - 创建多点相机预设
+- `/vcam addpoint [运行时间]` - 添加当前位置(包括角度)为路径点
+- `/vcam finish` - 完成预设创建
 - `/vcam random start <间隔秒>` - 开始随机切换预设
 - `/vcam random stop` - 停止随机切换预设
 - `/vcam random add <预设名>` - 添加预设到随机切换池
@@ -46,6 +49,7 @@ Virtual-Camera 是一个功能强大的 Minecraft 插件，为服务器管理员
 - `virtualcamera.preset.load` - 加载预设权限
 - `virtualcamera.preset.delete` - 删除预设权限
 - `virtualcamera.preset.list` - 列出预设权限
+- `virtualcamera.preset.create` - 创建预设权限
 - `virtualcamera.sequence.play` - 播放序列权限
 - `virtualcamera.sequence.stop` - 停止序列权限
 - `virtualcamera.random.start` - 开始随机切换权限
@@ -170,6 +174,14 @@ sequences:
 4. 编辑配置文件，将两个位置添加到同一个预设中形成路径
 5. 播放预设查看运镜效果: `/vcam load preset_name`
 
+### 创建多点相机预设（新功能）
+
+1. 开始创建预设: `/vcam create my_preset`
+2. 移动到起始位置（包括调整视角角度）并添加第一个点: `/vcam addpoint`
+3. 移动到第二个位置并添加点（指定到下一点的运行时间）: `/vcam addpoint 2.5`
+4. 继续添加更多点（每个点都会记录位置和视角角度）...
+5. 完成预设创建: `/vcam finish`
+
 ### 创建文本显示效果
 
 在配置文件的预设中添加texts部分:
@@ -245,4 +257,4 @@ mvn package
 
 ## 许可证
 
-[GPL-3.0 license]
+[请在此处添加许可证信息]
