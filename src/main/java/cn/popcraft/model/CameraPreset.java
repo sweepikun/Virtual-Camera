@@ -10,6 +10,7 @@ public class CameraPreset {
     private final List<Location> locations = new ArrayList<>();
     private final List<CommandAction> commands = new ArrayList<>();
     private final List<TextAction> texts = new ArrayList<>();
+    private final List<SegmentInfo> segmentInfos = new ArrayList<>(); // 每个段落的信息
     private CameraType type = CameraType.NORMAL;
 
     public CameraPreset(String name) {
@@ -20,6 +21,35 @@ public class CameraPreset {
         NORMAL,
         SPECTATOR,
         CINEMATIC
+    }
+
+    /**
+     * 段落信息类，存储每个路径段落的过渡类型和持续时间
+     */
+    public static class SegmentInfo {
+        private TransitionType transitionType;
+        private long duration; // 毫秒
+
+        public SegmentInfo(TransitionType transitionType, long duration) {
+            this.transitionType = transitionType;
+            this.duration = duration;
+        }
+
+        public TransitionType getTransitionType() {
+            return transitionType;
+        }
+
+        public void setTransitionType(TransitionType transitionType) {
+            this.transitionType = transitionType;
+        }
+
+        public long getDuration() {
+            return duration;
+        }
+
+        public void setDuration(long duration) {
+            this.duration = duration;
+        }
     }
 
     public static class CommandAction {
@@ -85,6 +115,8 @@ public class CameraPreset {
     public void setLocations(List<Location> locations) {
         this.locations.clear();
         this.locations.addAll(locations);
+        // 同步更新段落信息
+        updateSegmentInfos();
     }
 
     public List<CommandAction> getCommands() {
@@ -127,10 +159,15 @@ public class CameraPreset {
      */
     public void addLocation(Location location) {
         this.locations.add(location);
+        // 如果不是第一个点，添加默认段落信息
+        if (locations.size() > 1) {
+            segmentInfos.add(new SegmentInfo(TransitionType.SMOOTH, 3000)); // 默认3秒
+        }
     }
 
     public void addLocations(List<Location> locations) {
         this.locations.addAll(locations);
+        updateSegmentInfos();
     }
 
     /**
@@ -152,6 +189,7 @@ public class CameraPreset {
      */
     public void clearLocations() {
         this.locations.clear();
+        this.segmentInfos.clear();
     }
 
     /**
@@ -201,5 +239,65 @@ public class CameraPreset {
      */
     public int getTextCount() {
         return texts.size();
+    }
+    
+    /**
+     * 获取段落信息
+     * @return 段落信息列表
+     */
+    public List<SegmentInfo> getSegmentInfos() {
+        return new ArrayList<>(segmentInfos);
+    }
+    
+    /**
+     * 设置段落的过渡类型和持续时间
+     * @param segmentIndex 段落索引
+     * @param transitionType 过渡类型
+     * @param duration 持续时间(毫秒)
+     */
+    public void setSegmentInfo(int segmentIndex, TransitionType transitionType, long duration) {
+        if (segmentIndex >= 0 && segmentIndex < segmentInfos.size()) {
+            segmentInfos.get(segmentIndex).setTransitionType(transitionType);
+            segmentInfos.get(segmentIndex).setDuration(duration);
+        }
+    }
+    
+    /**
+     * 获取指定段落的过渡类型
+     * @param segmentIndex 段落索引
+     * @return 过渡类型
+     */
+    public TransitionType getSegmentTransitionType(int segmentIndex) {
+        if (segmentIndex >= 0 && segmentIndex < segmentInfos.size()) {
+            return segmentInfos.get(segmentIndex).getTransitionType();
+        }
+        return TransitionType.SMOOTH; // 默认值
+    }
+    
+    /**
+     * 获取指定段落的持续时间
+     * @param segmentIndex 段落索引
+     * @return 持续时间(毫秒)
+     */
+    public long getSegmentDuration(int segmentIndex) {
+        if (segmentIndex >= 0 && segmentIndex < segmentInfos.size()) {
+            return segmentInfos.get(segmentIndex).getDuration();
+        }
+        return 3000; // 默认值3秒
+    }
+    
+    /**
+     * 更新段落信息，确保与位置点数量同步
+     */
+    private void updateSegmentInfos() {
+        // 清除多余的段落信息
+        while (segmentInfos.size() >= locations.size()) {
+            segmentInfos.remove(segmentInfos.size() - 1);
+        }
+        
+        // 添加缺少的段落信息
+        while (segmentInfos.size() < locations.size() - 1) {
+            segmentInfos.add(new SegmentInfo(TransitionType.SMOOTH, 3000));
+        }
     }
 }

@@ -1,7 +1,7 @@
 package cn.popcraft.util;
 
+import cn.popcraft.model.TransitionType;
 import org.bukkit.Location;
-import org.bukkit.util.Vector;
 
 /**
  * 路径插值器，用于在关键帧之间进行平滑插值计算
@@ -31,27 +31,17 @@ public class PathInterpolator {
     }
     
     /**
-     * 使用缓动函数的插值 (EaseInOutQuad)
+     * 根据过渡类型获取插值后的位置
      * @param start 起始位置
      * @param end 结束位置
      * @param progress 进度 (0.0 到 1.0)
+     * @param transitionType 过渡类型
      * @return 插值后的位置
      */
-    public static Location easeInOutQuad(Location start, Location end, float progress) {
-        float t = progress < 0.5f ? 2 * progress * progress : 1 - (float)Math.pow(-2 * progress + 2, 2) / 2;
-        return lerp(start, end, t);
-    }
-    
-    /**
-     * 使用缓动函数的插值 (EaseOutCubic)
-     * @param start 起始位置
-     * @param end 结束位置
-     * @param progress 进度 (0.0 到 1.0)
-     * @return 插值后的位置
-     */
-    public static Location easeOutCubic(Location start, Location end, float progress) {
-        float t = (float) (1 - Math.pow(1 - progress, 3));
-        return lerp(start, end, t);
+    public static Location interpolate(Location start, Location end, float progress, TransitionType transitionType) {
+        // 使用TransitionType中的计算方法
+        double adjustedProgress = transitionType.calculateProgress(progress);
+        return lerp(start, end, (float) adjustedProgress);
     }
     
     /**

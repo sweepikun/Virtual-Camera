@@ -1,7 +1,7 @@
 package cn.popcraft.model;
 
 /**
- * 过渡类型枚举
+ * 过渡类型枚举，定义不同的运镜过渡效果
  */
 public enum TransitionType {
     /**
@@ -15,7 +15,7 @@ public enum TransitionType {
     },
     
     /**
-     * 线性过渡 - 匀速移动到目标位置
+     * 线性过渡
      */
     LINEAR {
         @Override
@@ -25,32 +25,75 @@ public enum TransitionType {
     },
     
     /**
-     * 缓入过渡 - 开始慢，然后加速
-     */
-    EASE_IN {
-        @Override
-        public double calculateProgress(double t) {
-            return t * t; // 二次方缓入
-        }
-    },
-    
-    /**
-     * 缓出过渡 - 开始快，然后减速
-     */
-    EASE_OUT {
-        @Override
-        public double calculateProgress(double t) {
-            return 1 - (1 - t) * (1 - t); // 二次方缓出
-        }
-    },
-    
-    /**
-     * 缓入缓出过渡 - 开始慢，中间快，结束慢
+     * 缓入缓出过渡
      */
     EASE_IN_OUT {
         @Override
         public double calculateProgress(double t) {
-            return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; // 二次方缓入缓出
+            return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        }
+    },
+    
+    /**
+     * 缓入过渡
+     */
+    EASE_IN {
+        @Override
+        public double calculateProgress(double t) {
+            return t * t;
+        }
+    },
+    
+    /**
+     * 缓出过渡
+     */
+    EASE_OUT {
+        @Override
+        public double calculateProgress(double t) {
+            return 1 - (1 - t) * (1 - t);
+        }
+    },
+    
+    /**
+     * 弹跳过渡效果
+     */
+    BOUNCE {
+        @Override
+        public double calculateProgress(double t) {
+            if (t < 1 / 2.75) {
+                return 7.5625 * t * t;
+            } else if (t < 2 / 2.75) {
+                t -= 1.5 / 2.75;
+                return 7.5625 * t * t + 0.75;
+            } else if (t < 2.5 / 2.75) {
+                t -= 2.25 / 2.75;
+                return 7.5625 * t * t + 0.9375;
+            } else {
+                t -= 2.625 / 2.75;
+                return 7.5625 * t * t + 0.984375;
+            }
+        }
+    },
+    
+    /**
+     * 弹性过渡效果
+     */
+    ELASTIC {
+        @Override
+        public double calculateProgress(double t) {
+            if (t == 0 || t == 1) return t;
+            double c4 = 2 * Math.PI / 3;
+            return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+        }
+    },
+    
+    /**
+     * 平滑过渡（默认）
+     */
+    SMOOTH {
+        @Override
+        public double calculateProgress(double t) {
+            return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
         }
     };
 

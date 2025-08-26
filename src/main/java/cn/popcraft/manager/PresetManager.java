@@ -10,7 +10,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+
+@SuppressWarnings("unchecked")
 
 public class PresetManager {
     private final JavaPlugin plugin;
@@ -41,32 +42,29 @@ public class PresetManager {
             
             // 加载位置点
             // 加载位置点
-            List<Map<String, Object>> locationMaps = presetSection.getMapList("locations").stream()
-                .map(map -> (Map<String, Object>) map)
-                .collect(Collectors.toList());
-            List<Location> locations = locationMaps.stream()
-                .map(this::mapToLocation)
-                .collect(Collectors.toList());
+            List<Map<?, ?>> locationMaps = presetSection.getMapList("locations");
+            List<Location> locations = new ArrayList<>();
+            for (Map<?, ?> map : locationMaps) {
+                locations.add(mapToLocation((Map<String, Object>) map));
+            }
             preset.setLocations(locations);
 
             // 加载命令
-            List<Map<String, Object>> commandMaps = presetSection.getMapList("commands").stream()
-                .map(map -> (Map<String, Object>) map)
-                .collect(Collectors.toList());
-            for (Map<String, Object> cmdMap : commandMaps) {
-                String command = (String) cmdMap.get("command");
-                long delayMs = ((Number) cmdMap.getOrDefault("delay", 0L)).longValue();
+            List<Map<?, ?>> commandMaps = presetSection.getMapList("commands");
+            for (Map<?, ?> cmdMap : commandMaps) {
+                Map<String, Object> typedCmdMap = (Map<String, Object>) cmdMap;
+                String command = (String) typedCmdMap.get("command");
+                long delayMs = ((Number) typedCmdMap.getOrDefault("delay", 0L)).longValue();
                 long safeDelay = delayMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : delayMs;
                 preset.addCommand(command, safeDelay);
             }
 
             // 加载文本
-            List<Map<String, Object>> textMaps = presetSection.getMapList("texts").stream()
-                .map(map -> (Map<String, Object>) map)
-                .collect(Collectors.toList());
-            for (Map<String, Object> textMap : textMaps) {
-                String text = (String) textMap.get("text");
-                long delayMs = ((Number) textMap.getOrDefault("delay", 0L)).longValue();
+            List<Map<?, ?>> textMaps = presetSection.getMapList("texts");
+            for (Map<?, ?> textMap : textMaps) {
+                Map<String, Object> typedTextMap = (Map<String, Object>) textMap;
+                String text = (String) typedTextMap.get("text");
+                long delayMs = ((Number) typedTextMap.getOrDefault("delay", 0L)).longValue();
                 long safeDelay = delayMs > Integer.MAX_VALUE ? Integer.MAX_VALUE : delayMs;
                 preset.addText(text, safeDelay);
             }

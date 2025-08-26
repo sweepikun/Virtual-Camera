@@ -6,6 +6,7 @@ Virtual-Camera 是一个功能强大的 Minecraft 插件，为服务器管理员
 
 - **多相机预设管理**：创建、保存和管理多个相机位置预设
 - **平滑运镜效果**：支持在多个关键帧之间实现平滑过渡动画
+- **多种过渡效果**：支持线性、缓入缓出、弹性、弹跳等多种过渡效果
 - **自定义路径动画**：配置复杂的相机移动路径
 - **文本显示系统**：在运镜过程中显示自定义文本（动作栏、标题等）
 - **命令调度**：在指定时间点自动执行命令
@@ -35,12 +36,17 @@ Virtual-Camera 是一个功能强大的 Minecraft 插件，为服务器管理员
 - `/vcam create <名称>` - 创建多点相机预设
 - `/vcam addpoint [运行时间]` - 添加当前位置(包括角度)为路径点
 - `/vcam finish` - 完成预设创建
+- `/vcam segment <索引> <类型> <时间> <预设>` - 设置段落过渡效果
 - `/vcam random start <间隔秒>` - 开始随机切换预设
 - `/vcam random stop` - 停止随机切换预设
 - `/vcam random add <预设名>` - 添加预设到随机切换池
 - `/vcam random remove <预设名>` - 从随机切换池移除预设
 - `/vcam random list` - 列出随机切换池中的预设
 - `/vcam help` - 显示帮助信息
+
+也可以使用别名命令：
+- `/camera` - 与 `/vcam` 功能相同
+- `/cam` - 与 `/vcam` 功能相同
 
 ### 权限节点
 
@@ -50,6 +56,7 @@ Virtual-Camera 是一个功能强大的 Minecraft 插件，为服务器管理员
 - `virtualcamera.preset.delete` - 删除预设权限
 - `virtualcamera.preset.list` - 列出预设权限
 - `virtualcamera.preset.create` - 创建预设权限
+- `virtualcamera.preset.edit` - 编辑预设权限
 - `virtualcamera.sequence.play` - 播放序列权限
 - `virtualcamera.sequence.stop` - 停止序列权限
 - `virtualcamera.random.start` - 开始随机切换权限
@@ -181,6 +188,17 @@ sequences:
 3. 移动到第二个位置并添加点（指定到下一点的运行时间）: `/vcam addpoint 2.5`
 4. 继续添加更多点（每个点都会记录位置和视角角度）...
 5. 完成预设创建: `/vcam finish`
+
+### 设置段落过渡效果
+
+创建预设后，可以为每个段落设置不同的过渡效果和持续时间：
+
+```
+/vcam segment 0 ease_in_out 3.0 my_preset
+/vcam segment 1 bounce 2.5 my_preset
+```
+
+这将为预设 `my_preset` 的第一个段落设置缓入缓出效果，持续3秒；为第二个段落设置弹跳效果，持续2.5秒。
 
 ### 创建文本显示效果
 

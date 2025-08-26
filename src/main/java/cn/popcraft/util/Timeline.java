@@ -1,6 +1,7 @@
 package cn.popcraft.util;
 
 import cn.popcraft.model.CameraPreset;
+import cn.popcraft.model.TransitionType;
 import org.bukkit.Location;
 
 import java.util.ArrayList;
@@ -14,12 +15,16 @@ public class Timeline {
     private final List<Location> keyframes;
     private final TreeMap<Long, CameraPreset.TextAction> textActions;
     private final TreeMap<Long, CameraPreset.CommandAction> commandActions;
+    private final List<TransitionType> transitionTypes; // 每个段落的过渡类型
+    private final List<Long> segmentDurations; // 每个段落的持续时间
     private long totalDuration; // 总持续时间(毫秒)
     
     public Timeline() {
         this.keyframes = new ArrayList<>();
         this.textActions = new TreeMap<>();
         this.commandActions = new TreeMap<>();
+        this.transitionTypes = new ArrayList<>();
+        this.segmentDurations = new ArrayList<>();
         this.totalDuration = 0;
     }
     
@@ -29,6 +34,37 @@ public class Timeline {
      */
     public void addKeyframe(Location location) {
         keyframes.add(location);
+        // 如果不是第一个点，添加默认过渡类型
+        if (keyframes.size() > 1) {
+            transitionTypes.add(TransitionType.SMOOTH);
+            segmentDurations.add(3000L); // 默认3秒
+        }
+    }
+    
+    /**
+     * 设置段落的过渡类型和持续时间
+     * @param segmentIndex 段落索引
+     * @param transitionType 过渡类型
+     * @param duration 持续时间(毫秒)
+     */
+    public void setSegmentTransition(int segmentIndex, TransitionType transitionType, long duration) {
+        if (segmentIndex >= 0 && segmentIndex < transitionTypes.size()) {
+            transitionTypes.set(segmentIndex, transitionType);
+            segmentDurations.set(segmentIndex, duration);
+            
+            // 重新计算总持续时间
+            recalculateTotalDuration();
+        }
+    }
+    
+    /**
+     * 重新计算总持续时间
+     */
+    private void recalculateTotalDuration() {
+        totalDuration = 0;
+        for (Long duration : segmentDurations) {
+            totalDuration += duration;
+        }
     }
     
     /**
@@ -71,23 +107,36 @@ public class Timeline {
             return keyframes.get(0);
         }
         
-        // 计算当前进度
-        float progress = (float) elapsed / totalDuration;
-        if (progress >= 1.0f) {
+        // 如果时间超过了总持续时间，返回最后一个关键帧
+        if (elapsed >= totalDuration) {
             return keyframes.get(keyframes.size() - 1);
         }
         
-        // 计算在关键帧中的位置
-        float scaledProgress = progress * (keyframes.size() - 1);
-        int index = (int) Math.floor(scaledProgress);
-        float segmentProgress = scaledProgress - index;
-        
-        if (index >= keyframes.size() - 1) {
-            return keyframes.get(keyframes.size() - 1);
+        // 找到当前所在的段落
+        long accumulatedTime = 0;
+        for (int i = 0; i < segmentDurations.size(); i++) {
+            long segmentDuration = segmentDurations.get(i);
+            if (elapsed <= accumulatedTime + segmentDuration || i == segmentDurations.size() - 1) {
+                // 计算在当前段落中的进度
+                long timeInSegment = elapsed - accumulatedTime;
+                float progress = (float) timeInSegment / segmentDuration;
+                
+                // 获取过渡类型
+                TransitionType transitionType = transitionTypes.get(i);
+                
+                // 使用对应的插值函数
+                return PathInterpolator.interpolate(
+                    keyframes.get(i), 
+                    keyframes.get(i + 1), 
+                    progress, 
+                    transitionType
+                );
+            }
+            accumulatedTime += segmentDuration;
         }
         
-        // 使用PathInterpolator进行插值
-        return PathInterpolator.easeInOutQuad(keyframes.get(index), keyframes.get(index + 1), segmentProgress);
+        // 默认返回最后一个关键帧
+        return keyframes.get(keyframes.size() - 1);
     }
     
     /**
@@ -144,5 +193,13 @@ public class Timeline {
      */
     public boolean isEmpty() {
         return keyframes.isEmpty() && textActions.isEmpty() && commandActions.isEmpty();
+    }
+    
+    /**
+     * 获取关键帧数量
+     * @return 关键帧数量
+     */
+    public int getKeyframeCount() {
+        return keyframes.size();
     }
 }

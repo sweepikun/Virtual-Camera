@@ -5,6 +5,7 @@ import cn.popcraft.manager.CameraManager;
 import cn.popcraft.manager.RandomSwitchController;
 import cn.popcraft.model.CameraPreset;
 import cn.popcraft.model.CameraSequence;
+import cn.popcraft.model.TransitionType;
 import cn.popcraft.session.CameraSession;
 import cn.popcraft.session.SessionManager;
 import org.bukkit.ChatColor;
@@ -120,6 +121,10 @@ public class CameraCommand implements CommandExecutor {
                 
             case "finish":
                 handleFinishPreset(player);
+                break;
+                
+            case "segment":
+                handleSegmentConfig(player, args);
                 break;
 
             case "random":
@@ -240,6 +245,13 @@ public class CameraCommand implements CommandExecutor {
             preset.addLocation(point);
         }
         
+        // 设置段落信息
+        List<Double> durations = data.getDurations();
+        for (int i = 0; i < durations.size() && i < preset.getLocationCount() - 1; i++) {
+            long durationMs = (long) (durations.get(i) * 1000); // 转换为毫秒
+            preset.setSegmentInfo(i, TransitionType.SMOOTH, durationMs);
+        }
+        
         // 保存预设
         plugin.getPresetManager().addPreset(presetName, preset);
         cameraManager.saveToConfig(); // 保存到配置文件
@@ -248,6 +260,69 @@ public class CameraCommand implements CommandExecutor {
         presetCreationData.remove(playerId);
         
         player.sendMessage(ChatColor.GREEN + "预设 '" + presetName + "' 创建成功！共 " + points.size() + " 个路径点。");
+    }
+    
+    /**
+     * 处理段落配置命令
+     * /vcam segment <段落索引> <过渡类型> <持续时间(秒)> <预设名称>
+     */
+    private void handleSegmentConfig(Player player, String[] args) {
+        if (!player.hasPermission("virtualcamera.preset.edit")) {
+            player.sendMessage(ChatColor.RED + "你没有权限编辑预设！");
+            return;
+        }
+        
+        if (args.length < 5) {
+            player.sendMessage(ChatColor.RED + "用法: /vcam segment <段落索引> <过渡类型> <持续时间(秒)> <预设名称>");
+            player.sendMessage(ChatColor.GRAY + "过渡类型: linear, ease_in_out, ease_in, ease_out, bounce, elastic, smooth");
+            return;
+        }
+        
+        try {
+            int segmentIndex = Integer.parseInt(args[1]);
+            
+            // 解析过渡类型
+            TransitionType transitionType;
+            try {
+                transitionType = TransitionType.valueOf(args[2].toUpperCase());
+            } catch (IllegalArgumentException e) {
+                player.sendMessage(ChatColor.RED + "无效的过渡类型！可用类型: linear, ease_in_out, ease_in, ease_out, bounce, elastic, smooth");
+                return;
+            }
+            
+            // 解析持续时间
+            double durationSeconds = Double.parseDouble(args[3]);
+            if (durationSeconds <= 0) {
+                player.sendMessage(ChatColor.RED + "持续时间必须大于0！");
+                return;
+            }
+            
+            // 获取预设名称
+            String presetName = args[4];
+            CameraPreset preset = plugin.getPresetManager().getPreset(presetName);
+            if (preset == null) {
+                player.sendMessage(ChatColor.RED + "预设 '" + presetName + "' 不存在！");
+                return;
+            }
+            
+            if (segmentIndex < 0 || segmentIndex >= preset.getLocationCount() - 1) {
+                player.sendMessage(ChatColor.RED + "段落索引超出范围！有效范围: 0-" + (preset.getLocationCount() - 2));
+                return;
+            }
+            
+            long durationMs = (long) (durationSeconds * 1000);
+            
+            // 设置段落信息
+            preset.setSegmentInfo(segmentIndex, transitionType, durationMs);
+            
+            // 保存到配置文件
+            cameraManager.saveToConfig();
+            
+            player.sendMessage(ChatColor.GREEN + "已更新预设 '" + presetName + "' 的段落 " + segmentIndex + 
+                              "，过渡类型: " + transitionType + "，持续时间: " + durationSeconds + "秒");
+        } catch (NumberFormatException e) {
+            player.sendMessage(ChatColor.RED + "无效的数字参数！请检查段落索引和持续时间。");
+        }
     }
 
     /**
@@ -417,6 +492,7 @@ public class CameraCommand implements CommandExecutor {
         player.sendMessage(ChatColor.GRAY + "/vcam create <名称>" + ChatColor.WHITE + " - 创建多点相机预设");
         player.sendMessage(ChatColor.GRAY + "/vcam addpoint [时间]" + ChatColor.WHITE + " - 添加当前点为路径点");
         player.sendMessage(ChatColor.GRAY + "/vcam finish" + ChatColor.WHITE + " - 完成预设创建");
+        player.sendMessage(ChatColor.GRAY + "/vcam segment <索引> <类型> <时间> <预设>" + ChatColor.WHITE + " - 设置段落过渡效果");
         player.sendMessage(ChatColor.GRAY + "/vcam random start <时间>" + ChatColor.WHITE + " - 开始随机切换预设");
         player.sendMessage(ChatColor.GRAY + "/vcam random stop" + ChatColor.WHITE + " - 停止随机切换预设");
         player.sendMessage(ChatColor.GRAY + "/vcam random add <名称>" + ChatColor.WHITE + " - 添加预设到随机切换池");

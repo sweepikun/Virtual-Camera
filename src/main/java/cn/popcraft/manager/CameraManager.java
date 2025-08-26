@@ -80,6 +80,12 @@ public class CameraManager {
             timeline.addKeyframe(newLoc);
         }
         
+        // 设置每个段落的过渡类型和持续时间
+        for (int i = 0; i < preset.getSegmentInfos().size(); i++) {
+            CameraPreset.SegmentInfo segmentInfo = preset.getSegmentInfos().get(i);
+            timeline.setSegmentTransition(i, segmentInfo.getTransitionType(), segmentInfo.getDuration());
+        }
+        
         // 添加文本动作
         for (CameraPreset.TextAction text : preset.getTexts()) {
             timeline.addTextAction(text.getDelay(), text);
@@ -581,6 +587,12 @@ public class CameraManager {
             Location newLoc = loc.clone();
             newLoc.setWorld(player.getWorld());
             timeline.addKeyframe(newLoc);
+        }
+        
+        // 设置每个段落的过渡类型和持续时间
+        for (int i = 0; i < preset.getSegmentInfos().size(); i++) {
+            CameraPreset.SegmentInfo segmentInfo = preset.getSegmentInfos().get(i);
+            timeline.setSegmentTransition(i, segmentInfo.getTransitionType(), segmentInfo.getDuration());
         }
         
         // 添加文本动作
