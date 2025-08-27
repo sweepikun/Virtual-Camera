@@ -5,6 +5,7 @@ import cn.popcraft.manager.CameraPresetManager;
 import cn.popcraft.manager.RandomSwitchController;
 import cn.popcraft.manager.TimedSequenceController;
 import cn.popcraft.command.CameraCommand;
+import cn.popcraft.command.CameraTabCompleter;
 import cn.popcraft.listener.CameraListener;
 import cn.popcraft.session.SessionManager;
 import org.bukkit.plugin.Plugin;
@@ -30,7 +31,9 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
         cameraManager = new CameraManager(this, sessionManager);
         
         // 注册命令
-        getCommand("vcam").setExecutor(new CameraCommand(this, sessionManager, cameraManager));
+        CameraCommand cameraCommand = new CameraCommand(this, sessionManager, cameraManager);
+        getCommand("vcam").setExecutor(cameraCommand);
+        getCommand("vcam").setTabCompleter(new CameraTabCompleter(cameraManager));
         
         // 注册事件
         getServer().getPluginManager().registerEvents(new CameraListener(this, sessionManager, cameraManager), this);

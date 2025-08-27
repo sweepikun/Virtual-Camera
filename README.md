@@ -13,13 +13,14 @@ Virtual-Camera 是一个功能强大的 Minecraft 插件，为服务器管理员
 - **序列播放**：创建和播放相机序列，支持循环播放
 - **随机切换**：随机切换不同的相机预设
 - **权限控制**：完整的权限系统，确保安全使用
+- **预设分文件存储**：每个预设保存为单独的.yml文件，便于管理和分享
 
 ## 安装方法
 
 1. 下载插件 JAR 文件
 2. 将 JAR 文件放入服务器的 `plugins` 文件夹
 3. 启动或重启服务器
-4. 插件会自动生成配置文件 `config.yml`
+4. 插件会自动生成配置文件 `config.yml` 和 `presets` 文件夹
 
 ## 使用方法
 
@@ -68,6 +69,10 @@ Virtual-Camera 是一个功能强大的 Minecraft 插件，为服务器管理员
 ## 配置说明
 
 插件的配置文件位于 `plugins/Virtual-Camera/config.yml`：
+
+每个预设现在保存在独立的文件中，位于 `plugins/Virtual-Camera/presets/` 文件夹下，文件名与预设名称相同，扩展名为 `.yml`。
+
+示例预设文件 `plugins/Virtual-Camera/presets/demo_path.yml`：
 
 ```yaml
 # 全局设置
@@ -158,7 +163,9 @@ sequences:
 - `permissions`: 权限检查设置
 
 #### 预设配置
-- `presets`: 所有相机预设的根节点
+- 预设现在保存在 `plugins/Virtual-Camera/presets/` 文件夹中
+- 每个 `.yml` 文件包含一个预设的完整配置
+- 文件名（不含扩展名）即为预设名称
 - 每个预设包含:
   - `type`: 相机类型
   - `locations`: 位置点列表（支持多个关键帧）
@@ -178,8 +185,8 @@ sequences:
 1. 进入相机模式: `/vcam enter`
 2. 移动到起始位置并保存: `/vcam save start`
 3. 移动到结束位置并保存: `/vcam save end`
-4. 编辑配置文件，将两个位置添加到同一个预设中形成路径
-5. 播放预设查看运镜效果: `/vcam load preset_name`
+4. 编辑 `plugins/Virtual-Camera/presets/start.yml` 文件，将两个位置添加到同一个预设中形成路径
+5. 播放预设查看运镜效果: `/vcam load start`
 
 ### 创建多点相机预设（新功能）
 
@@ -188,6 +195,8 @@ sequences:
 3. 移动到第二个位置并添加点（指定到下一点的运行时间）: `/vcam addpoint 2.5`
 4. 继续添加更多点（每个点都会记录位置和视角角度）...
 5. 完成预设创建: `/vcam finish`
+
+预设将自动保存为 `plugins/Virtual-Camera/presets/my_preset.yml` 文件。
 
 ### 设置段落过渡效果
 
@@ -264,6 +273,7 @@ mvn package
 1. **插件无法加载**: 检查服务器版本是否兼容
 2. **权限问题**: 确保为用户分配了适当的权限节点
 3. **配置不生效**: 检查配置文件格式是否正确，重启服务器使配置生效
+4. **预设无法加载**: 检查 `presets` 文件夹中的 `.yml` 文件格式是否正确
 
 ### 日志查看
 

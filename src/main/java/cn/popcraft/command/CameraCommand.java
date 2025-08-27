@@ -252,9 +252,9 @@ public class CameraCommand implements CommandExecutor {
             preset.setSegmentInfo(i, TransitionType.SMOOTH, durationMs);
         }
         
-        // 保存预设
+        // 保存预设到内存和文件
         plugin.getPresetManager().addPreset(presetName, preset);
-        cameraManager.saveToConfig(); // 保存到配置文件
+        cameraManager.savePresetToFile(presetName, preset);
         
         // 清理临时数据
         presetCreationData.remove(playerId);
@@ -316,7 +316,7 @@ public class CameraCommand implements CommandExecutor {
             preset.setSegmentInfo(segmentIndex, transitionType, durationMs);
             
             // 保存到配置文件
-            cameraManager.saveToConfig();
+            cameraManager.savePresetToFile(presetName, preset);
             
             player.sendMessage(ChatColor.GREEN + "已更新预设 '" + presetName + "' 的段落 " + segmentIndex + 
                               "，过渡类型: " + transitionType + "，持续时间: " + durationSeconds + "秒");
@@ -375,6 +375,7 @@ public class CameraCommand implements CommandExecutor {
 
         if (cameraManager.savePreset(player, presetName)) {
             player.sendMessage(ChatColor.GREEN + "已保存预设：" + presetName);
+            cameraManager.saveToConfig(); // 确保保存到文件
         } else {
             player.sendMessage(ChatColor.RED + "保存预设失败！");
         }

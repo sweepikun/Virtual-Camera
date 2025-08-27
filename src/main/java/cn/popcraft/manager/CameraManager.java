@@ -4,16 +4,21 @@ import cn.popcraft.VirtualCamera;
 import cn.popcraft.model.Camera;
 import cn.popcraft.model.CameraPreset;
 import cn.popcraft.model.CameraSequence;
+import cn.popcraft.model.TransitionType;
 import cn.popcraft.session.CameraSession;
 import cn.popcraft.session.SessionManager;
-import cn.popcraft.util.Timeline; // 添加Timeline导入
+import cn.popcraft.util.Timeline;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
+import org.bukkit.World;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -49,6 +54,9 @@ public class CameraManager {
         
         // 从配置文件加载预设和序列
         loadFromConfig();
+        
+        // 从单独的预设文件加载预设
+        loadAllPresets();
     }
     
     /**
@@ -363,54 +371,13 @@ public class CameraManager {
     }
 
     /**
-     * 保存预设和序列到配置文件
+     * 保存序列到配置文件
      */
     public void saveToConfig() {
         FileConfiguration config = plugin.getPlugin().getConfig();
         
-        // 清除旧数据
-        config.set("presets", null);
+        // 只清除序列数据，保留预设部分
         config.set("sequences", null);
-        
-        // 保存预设
-        for (Map.Entry<String, CameraPreset> entry : presets.entrySet()) {
-            String presetName = entry.getKey();
-            CameraPreset preset = entry.getValue();
-            
-            String basePath = "presets." + presetName + ".";
-            config.set(basePath + "type", preset.getType().name());
-            
-            // 保存位置点
-            List<Location> locations = preset.getLocations();
-            for (int i = 0; i < locations.size(); i++) {
-                Location loc = locations.get(i);
-                String locPath = basePath + "locations." + i + ".";
-                config.set(locPath + "x", loc.getX());
-                config.set(locPath + "y", loc.getY());
-                config.set(locPath + "z", loc.getZ());
-                config.set(locPath + "yaw", loc.getYaw());
-                config.set(locPath + "pitch", loc.getPitch());
-            }
-            
-            // 保存命令
-            List<CameraPreset.CommandAction> commands = preset.getCommands();
-            for (int i = 0; i < commands.size(); i++) {
-                CameraPreset.CommandAction cmd = commands.get(i);
-                String cmdPath = basePath + "commands." + i + ".";
-                config.set(cmdPath + "command", cmd.getCommand());
-                config.set(cmdPath + "delay", cmd.getDelay());
-            }
-            
-            // 保存文本
-            List<CameraPreset.TextAction> texts = preset.getTexts();
-            for (int i = 0; i < texts.size(); i++) {
-                CameraPreset.TextAction text = texts.get(i);
-                String textPath = basePath + "texts." + i + ".";
-                config.set(textPath + "text", text.getText());
-                config.set(textPath + "delay", text.getDelay());
-                config.set(textPath + "duration", text.getDuration());
-            }
-        }
         
         // 保存序列
         for (Map.Entry<String, CameraSequence> entry : sequences.entrySet()) {
@@ -551,13 +518,179 @@ public class CameraManager {
         preset.addLocation(location);
         preset.setType(camera.getType());
         
-        // 保存预设
+        // 保存预设到内存和文件
         presets.put(presetName, preset);
-        
-        // 保存到配置文件
-        saveToConfig();
+        savePresetToFile(presetName, preset);
         
         return true;
+    }
+
+    /**
+     * 保存预设到单独的YML文件
+     * @param presetName 预设名称
+     * @param preset 预设对象
+     */
+    public void savePresetToFile(String presetName, CameraPreset preset) {
+        try {
+            File presetsDir = new File(plugin.getPlugin().getDataFolder(), "presets");
+            if (!presetsDir.exists()) {
+                presetsDir.mkdirs();
+            }
+            
+            File presetFile = new File(presetsDir, presetName + ".yml");
+            FileConfiguration presetConfig = YamlConfiguration.loadConfiguration(presetFile);
+            
+            // 清除旧数据
+            presetConfig.set(presetName, null);
+            
+            // 保存预设数据
+            String basePath = presetName + ".";
+            presetConfig.set(basePath + "type", preset.getType().name());
+            
+            // 保存位置点
+            List<Location> locations = preset.getLocations();
+            for (int i = 0; i < locations.size(); i++) {
+                Location loc = locations.get(i);
+                String locPath = basePath + "locations." + i + ".";
+                presetConfig.set(locPath + "x", loc.getX());
+                presetConfig.set(locPath + "y", loc.getY());
+                presetConfig.set(locPath + "z", loc.getZ());
+                presetConfig.set(locPath + "yaw", loc.getYaw());
+                presetConfig.set(locPath + "pitch", loc.getPitch());
+            }
+            
+            // 保存命令
+            List<CameraPreset.CommandAction> commands = preset.getCommands();
+            for (int i = 0; i < commands.size(); i++) {
+                CameraPreset.CommandAction cmd = commands.get(i);
+                String cmdPath = basePath + "commands." + i + ".";
+                presetConfig.set(cmdPath + "command", cmd.getCommand());
+                presetConfig.set(cmdPath + "delay", cmd.getDelay());
+            }
+            
+            // 保存文本
+            List<CameraPreset.TextAction> texts = preset.getTexts();
+            for (int i = 0; i < texts.size(); i++) {
+                CameraPreset.TextAction text = texts.get(i);
+                String textPath = basePath + "texts." + i + ".";
+                presetConfig.set(textPath + "text", text.getText());
+                presetConfig.set(textPath + "delay", text.getDelay());
+                presetConfig.set(textPath + "duration", text.getDuration());
+            }
+            
+            // 保存到文件
+            presetConfig.save(presetFile);
+        } catch (IOException e) {
+            plugin.getPlugin().getLogger().severe("无法保存预设文件 " + presetName + ": " + e.getMessage());
+        }
+    }
+
+    /**
+     * 从文件加载预设
+     * @param presetName 预设名称
+     * @return 相机预设，如果不存在则返回null
+     */
+    public CameraPreset loadPresetFromFile(String presetName) {
+        try {
+            File presetFile = new File(plugin.getPlugin().getDataFolder(), "presets/" + presetName + ".yml");
+            if (!presetFile.exists()) {
+                return null;
+            }
+            
+            FileConfiguration presetConfig = YamlConfiguration.loadConfiguration(presetFile);
+            ConfigurationSection presetSection = presetConfig.getConfigurationSection(presetName);
+            if (presetSection == null) {
+                return null;
+            }
+            
+            CameraPreset preset = new CameraPreset(presetName);
+            
+            // 加载相机类型
+            String typeStr = presetSection.getString("type", "NORMAL");
+            try {
+                CameraPreset.CameraType type = CameraPreset.CameraType.valueOf(typeStr);
+                preset.setType(type);
+            } catch (IllegalArgumentException e) {
+                preset.setType(CameraPreset.CameraType.NORMAL);
+            }
+            
+            // 加载位置点
+            ConfigurationSection locationsSection = presetSection.getConfigurationSection("locations");
+            if (locationsSection != null) {
+                for (String locKey : locationsSection.getKeys(false)) {
+                    ConfigurationSection locSection = locationsSection.getConfigurationSection(locKey);
+                    if (locSection != null) {
+                        double x = locSection.getDouble("x");
+                        double y = locSection.getDouble("y");
+                        double z = locSection.getDouble("z");
+                        float yaw = (float) locSection.getDouble("yaw");
+                        float pitch = (float) locSection.getDouble("pitch");
+                        
+                        Location loc = new Location(null, x, y, z, yaw, pitch);
+                        preset.addLocation(loc);
+                    }
+                }
+            }
+            
+            // 加载命令
+            ConfigurationSection commandsSection = presetSection.getConfigurationSection("commands");
+            if (commandsSection != null) {
+                for (String cmdKey : commandsSection.getKeys(false)) {
+                    ConfigurationSection cmdSection = commandsSection.getConfigurationSection(cmdKey);
+                    if (cmdSection != null) {
+                        String command = cmdSection.getString("command");
+                        long delay = cmdSection.getLong("delay");
+                        if (command != null) {
+                            preset.addCommand(command, delay);
+                        }
+                    }
+                }
+            }
+            
+            // 加载文本
+            ConfigurationSection textsSection = presetSection.getConfigurationSection("texts");
+            if (textsSection != null) {
+                for (String textKey : textsSection.getKeys(false)) {
+                    ConfigurationSection textSection = textsSection.getConfigurationSection(textKey);
+                    if (textSection != null) {
+                        String text = textSection.getString("text");
+                        long delay = textSection.getLong("delay");
+                        long duration = textSection.getLong("duration", 3000); // 默认持续3秒
+                        if (text != null) {
+                            preset.addText(text, delay, duration);
+                        }
+                    }
+                }
+            }
+            
+            return preset;
+        } catch (Exception e) {
+            plugin.getPlugin().getLogger().severe("无法加载预设文件 " + presetName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 加载所有预设文件
+     */
+    public void loadAllPresets() {
+        File presetsDir = new File(plugin.getPlugin().getDataFolder(), "presets");
+        if (!presetsDir.exists()) {
+            return;
+        }
+        
+        File[] presetFiles = presetsDir.listFiles((dir, name) -> name.endsWith(".yml"));
+        if (presetFiles == null) {
+            return;
+        }
+        
+        for (File presetFile : presetFiles) {
+            String presetName = presetFile.getName().replace(".yml", "");
+            CameraPreset preset = loadPresetFromFile(presetName);
+            if (preset != null) {
+                presets.put(presetName, preset);
+            }
+        }
     }
 
     /**
@@ -567,7 +700,18 @@ public class CameraManager {
      * @return 是否成功加载
      */
     public boolean loadPreset(Player player, String presetName) {
+        // 首先尝试从内存中获取预设
         CameraPreset preset = presets.get(presetName);
+        
+        // 如果内存中没有，则尝试从文件加载
+        if (preset == null) {
+            preset = loadPresetFromFile(presetName);
+            if (preset != null) {
+                // 将加载的预设添加到内存中
+                presets.put(presetName, preset);
+            }
+        }
+        
         if (preset == null) {
             return false;
         }
@@ -618,6 +762,7 @@ public class CameraManager {
      * @return 是否成功删除
      */
     public boolean deletePreset(String presetName) {
+        // 从内存中移除
         if (!presets.containsKey(presetName)) {
             return false;
         }
@@ -628,6 +773,12 @@ public class CameraManager {
         // 从所有序列中移除包含此预设的条目
         for (CameraSequence sequence : sequences.values()) {
             sequence.removeEntriesByPresetName(presetName);
+        }
+        
+        // 删除预设文件
+        File presetFile = new File(plugin.getPlugin().getDataFolder(), "presets/" + presetName + ".yml");
+        if (presetFile.exists()) {
+            presetFile.delete();
         }
         
         // 保存到配置文件
