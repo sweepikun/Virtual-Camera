@@ -7,6 +7,7 @@ import cn.popcraft.session.CameraSession;
 import cn.popcraft.session.SessionManager;
 import cn.popcraft.util.Timeline;
 import cn.popcraft.model.Camera;
+import cn.popcraft.model.CameraSequence;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
