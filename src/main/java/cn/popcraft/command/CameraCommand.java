@@ -79,6 +79,14 @@ public class CameraCommand implements CommandExecutor {
                 handleLoad(player, args[1]);
                 break;
 
+            case "playpreset":
+                if (args.length < 2) {
+                    player.sendMessage(ChatColor.RED + "请指定预设名称！");
+                    return true;
+                }
+                handlePlayPreset(player, args[1]);
+                break;
+
             case "delete":
                 if (args.length < 2) {
                     player.sendMessage(ChatColor.RED + "请指定预设名称！");
@@ -398,6 +406,22 @@ public class CameraCommand implements CommandExecutor {
     }
 
     /**
+     * 处理直接播放预设命令
+     */
+    private void handlePlayPreset(Player player, String presetName) {
+        if (!player.hasPermission("virtualcamera.preset.load")) {
+            player.sendMessage(ChatColor.RED + "你没有权限播放预设！");
+            return;
+        }
+
+        if (cameraManager.switchToPreset(player, presetName)) {
+            player.sendMessage(ChatColor.GREEN + "正在播放预设：" + presetName);
+        } else {
+            player.sendMessage(ChatColor.RED + "找不到预设：" + presetName);
+        }
+    }
+
+    /**
      * 处理删除预设命令
      */
     private void handleDelete(Player player, String presetName) {
@@ -481,25 +505,23 @@ public class CameraCommand implements CommandExecutor {
      * 发送帮助信息
      */
     private void sendHelp(Player player) {
-        player.sendMessage(ChatColor.GREEN + "=== VirtualCamera 帮助 ===");
-        player.sendMessage(ChatColor.GRAY + "/vcam enter" + ChatColor.WHITE + " - 进入相机模式");
-        player.sendMessage(ChatColor.GRAY + "/vcam exit" + ChatColor.WHITE + " - 退出相机模式");
-        player.sendMessage(ChatColor.GRAY + "/vcam save <名称>" + ChatColor.WHITE + " - 保存当前相机位置为预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam load <名称>" + ChatColor.WHITE + " - 加载预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam delete <名称>" + ChatColor.WHITE + " - 删除预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam list" + ChatColor.WHITE + " - 列出所有预设和序列");
-        player.sendMessage(ChatColor.GRAY + "/vcam play <序列>" + ChatColor.WHITE + " - 播放相机序列");
-        player.sendMessage(ChatColor.GRAY + "/vcam stop" + ChatColor.WHITE + " - 停止序列播放");
-        player.sendMessage(ChatColor.GRAY + "/vcam create <名称>" + ChatColor.WHITE + " - 创建多点相机预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam addpoint [时间]" + ChatColor.WHITE + " - 添加当前点为路径点");
-        player.sendMessage(ChatColor.GRAY + "/vcam finish" + ChatColor.WHITE + " - 完成预设创建");
-        player.sendMessage(ChatColor.GRAY + "/vcam segment <索引> <类型> <时间> <预设>" + ChatColor.WHITE + " - 设置段落过渡效果");
-        player.sendMessage(ChatColor.GRAY + "/vcam random start <时间>" + ChatColor.WHITE + " - 开始随机切换预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam random stop" + ChatColor.WHITE + " - 停止随机切换预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam random add <名称>" + ChatColor.WHITE + " - 添加预设到随机切换池");
-        player.sendMessage(ChatColor.GRAY + "/vcam random remove <名称>" + ChatColor.WHITE + " - 从随机切换池中移除预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam random list" + ChatColor.WHITE + " - 列出随机切换池中的预设");
-        player.sendMessage(ChatColor.GRAY + "/vcam help" + ChatColor.WHITE + " - 显示此帮助信息");
+        player.sendMessage(ChatColor.GOLD + "==== VirtualCamera 帮助 ====");
+        player.sendMessage(ChatColor.YELLOW + "/vcam enter" + ChatColor.WHITE + " - 进入相机模式");
+        player.sendMessage(ChatColor.YELLOW + "/vcam exit" + ChatColor.WHITE + " - 退出相机模式");
+        player.sendMessage(ChatColor.YELLOW + "/vcam save <名称>" + ChatColor.WHITE + " - 保存当前位置为预设");
+        player.sendMessage(ChatColor.YELLOW + "/vcam load <名称>" + ChatColor.WHITE + " - 加载预设到当前位置");
+        player.sendMessage(ChatColor.YELLOW + "/vcam playpreset <名称>" + ChatColor.WHITE + " - 直接播放预设动画");
+        player.sendMessage(ChatColor.YELLOW + "/vcam delete <名称>" + ChatColor.WHITE + " - 删除预设");
+        player.sendMessage(ChatColor.YELLOW + "/vcam list" + ChatColor.WHITE + " - 列出所有预设");
+        player.sendMessage(ChatColor.YELLOW + "/vcam play <序列>" + ChatColor.WHITE + " - 播放相机序列");
+        player.sendMessage(ChatColor.YELLOW + "/vcam stop" + ChatColor.WHITE + " - 停止当前播放的序列");
+        player.sendMessage(ChatColor.YELLOW + "/vcam create <名称>" + ChatColor.WHITE + " - 创建新的路径预设");
+        player.sendMessage(ChatColor.YELLOW + "/vcam addpoint [持续时间]" + ChatColor.WHITE + " - 添加路径点");
+        player.sendMessage(ChatColor.YELLOW + "/vcam finish" + ChatColor.WHITE + " - 完成路径预设创建");
+        player.sendMessage(ChatColor.YELLOW + "/vcam segment <索引> <类型> <时间> <预设>" + ChatColor.WHITE + " - 设置路径段落");
+        player.sendMessage(ChatColor.YELLOW + "/vcam random <操作>" + ChatColor.WHITE + " - 随机切换操作");
+        player.sendMessage(ChatColor.YELLOW + "/vcam help" + ChatColor.WHITE + " - 显示此帮助");
+        player.sendMessage(ChatColor.GOLD + "========================");
     }
     
     /**

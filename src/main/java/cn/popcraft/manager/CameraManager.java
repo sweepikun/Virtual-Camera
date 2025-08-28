@@ -543,39 +543,45 @@ public class CameraManager {
             // 清除旧数据
             presetConfig.set(presetName, null);
             
-            // 保存预设数据
-            String basePath = presetName + ".";
-            presetConfig.set(basePath + "type", preset.getType().name());
+            // 保存预设数据 (使用扁平格式，符合README中的示例)
+            presetConfig.set("type", preset.getType().name());
             
-            // 保存位置点
-            List<Location> locations = preset.getLocations();
-            for (int i = 0; i < locations.size(); i++) {
-                Location loc = locations.get(i);
-                String locPath = basePath + "locations." + i + ".";
-                presetConfig.set(locPath + "x", loc.getX());
-                presetConfig.set(locPath + "y", loc.getY());
-                presetConfig.set(locPath + "z", loc.getZ());
-                presetConfig.set(locPath + "yaw", loc.getYaw());
-                presetConfig.set(locPath + "pitch", loc.getPitch());
+            // 保存位置点 (使用列表格式)
+            List<Map<String, Object>> locations = new ArrayList<>();
+            for (Location loc : preset.getLocations()) {
+                Map<String, Object> locMap = new HashMap<>();
+                locMap.put("x", loc.getX());
+                locMap.put("y", loc.getY());
+                locMap.put("z", loc.getZ());
+                locMap.put("yaw", loc.getYaw());
+                locMap.put("pitch", loc.getPitch());
+                locations.add(locMap);
+            }
+            presetConfig.set("locations", locations);
+            
+            // 保存命令 (使用列表格式)
+            List<Map<String, Object>> commands = new ArrayList<>();
+            for (CameraPreset.CommandAction cmd : preset.getCommands()) {
+                Map<String, Object> cmdMap = new HashMap<>();
+                cmdMap.put("command", cmd.getCommand());
+                cmdMap.put("delay", cmd.getDelay());
+                commands.add(cmdMap);
+            }
+            if (!commands.isEmpty()) {
+                presetConfig.set("commands", commands);
             }
             
-            // 保存命令
-            List<CameraPreset.CommandAction> commands = preset.getCommands();
-            for (int i = 0; i < commands.size(); i++) {
-                CameraPreset.CommandAction cmd = commands.get(i);
-                String cmdPath = basePath + "commands." + i + ".";
-                presetConfig.set(cmdPath + "command", cmd.getCommand());
-                presetConfig.set(cmdPath + "delay", cmd.getDelay());
+            // 保存文本 (使用列表格式)
+            List<Map<String, Object>> texts = new ArrayList<>();
+            for (CameraPreset.TextAction text : preset.getTexts()) {
+                Map<String, Object> textMap = new HashMap<>();
+                textMap.put("text", text.getText());
+                textMap.put("delay", text.getDelay());
+                textMap.put("duration", text.getDuration());
+                texts.add(textMap);
             }
-            
-            // 保存文本
-            List<CameraPreset.TextAction> texts = preset.getTexts();
-            for (int i = 0; i < texts.size(); i++) {
-                CameraPreset.TextAction text = texts.get(i);
-                String textPath = basePath + "texts." + i + ".";
-                presetConfig.set(textPath + "text", text.getText());
-                presetConfig.set(textPath + "delay", text.getDelay());
-                presetConfig.set(textPath + "duration", text.getDuration());
+            if (!texts.isEmpty()) {
+                presetConfig.set("texts", texts);
             }
             
             // 保存到文件
@@ -598,15 +604,11 @@ public class CameraManager {
             }
             
             FileConfiguration presetConfig = YamlConfiguration.loadConfiguration(presetFile);
-            ConfigurationSection presetSection = presetConfig.getConfigurationSection(presetName);
-            if (presetSection == null) {
-                return null;
-            }
             
             CameraPreset preset = new CameraPreset(presetName);
             
             // 加载相机类型
-            String typeStr = presetSection.getString("type", "NORMAL");
+            String typeStr = presetConfig.getString("type", "NORMAL");
             try {
                 CameraPreset.CameraType type = CameraPreset.CameraType.valueOf(typeStr);
                 preset.setType(type);
@@ -614,58 +616,49 @@ public class CameraManager {
                 preset.setType(CameraPreset.CameraType.NORMAL);
             }
             
-            // 加载位置点
-            ConfigurationSection locationsSection = presetSection.getConfigurationSection("locations");
-            if (locationsSection != null) {
-                for (String locKey : locationsSection.getKeys(false)) {
-                    ConfigurationSection locSection = locationsSection.getConfigurationSection(locKey);
-                    if (locSection != null) {
-                        double x = locSection.getDouble("x");
-                        double y = locSection.getDouble("y");
-                        double z = locSection.getDouble("z");
-                        float yaw = (float) locSection.getDouble("yaw");
-                        float pitch = (float) locSection.getDouble("pitch");
-                        
-                        Location loc = new Location(null, x, y, z, yaw, pitch);
-                        preset.addLocation(loc);
+            // 加载位置点 (支持列表格式)
+            List<Map<?, ?>> locationsList = presetConfig.getMapList("locations");
+            if (locationsList != null) {
+                for (Map<?, ?> locMap : locationsList) {
+                    double x = ((Number) locMap.get("x")).doubleValue();
+                    double y = ((Number) locMap.get("y")).doubleValue();
+                    double z = ((Number) locMap.get("z")).doubleValue();
+                    float yaw = ((Number) locMap.get("yaw")).floatValue();
+                    float pitch = ((Number) locMap.get("pitch")).floatValue();
+                    
+                    Location loc = new Location(null, x, y, z, yaw, pitch);
+                    preset.addLocation(loc);
+                }
+            }
+            
+            // 加载命令 (支持列表格式)
+            List<Map<?, ?>> commandsList = presetConfig.getMapList("commands");
+            if (commandsList != null) {
+                for (Map<?, ?> cmdMap : commandsList) {
+                    String command = (String) cmdMap.get("command");
+                    long delay = ((Number) cmdMap.get("delay")).longValue();
+                    if (command != null) {
+                        preset.addCommand(command, delay);
                     }
                 }
             }
             
-            // 加载命令
-            ConfigurationSection commandsSection = presetSection.getConfigurationSection("commands");
-            if (commandsSection != null) {
-                for (String cmdKey : commandsSection.getKeys(false)) {
-                    ConfigurationSection cmdSection = commandsSection.getConfigurationSection(cmdKey);
-                    if (cmdSection != null) {
-                        String command = cmdSection.getString("command");
-                        long delay = cmdSection.getLong("delay");
-                        if (command != null) {
-                            preset.addCommand(command, delay);
-                        }
-                    }
-                }
-            }
-            
-            // 加载文本
-            ConfigurationSection textsSection = presetSection.getConfigurationSection("texts");
-            if (textsSection != null) {
-                for (String textKey : textsSection.getKeys(false)) {
-                    ConfigurationSection textSection = textsSection.getConfigurationSection(textKey);
-                    if (textSection != null) {
-                        String text = textSection.getString("text");
-                        long delay = textSection.getLong("delay");
-                        long duration = textSection.getLong("duration", 3000); // 默认持续3秒
-                        if (text != null) {
-                            preset.addText(text, delay, duration);
-                        }
+            // 加载文本 (支持列表格式)
+            List<Map<?, ?>> textsList = presetConfig.getMapList("texts");
+            if (textsList != null) {
+                for (Map<?, ?> textMap : textsList) {
+                    String text = (String) textMap.get("text");
+                    long delay = ((Number) textMap.get("delay")).longValue();
+                    long duration = ((Number) textMap.get("duration")).longValue();
+                    if (text != null) {
+                        preset.addText(text, delay, duration);
                     }
                 }
             }
             
             return preset;
         } catch (Exception e) {
-            plugin.getPlugin().getLogger().severe("无法加载预设文件 " + presetName + ": " + e.getMessage());
+            plugin.getPlugin().getLogger().severe("加载预设文件失败 " + presetName + ": " + e.getMessage());
             return null;
         }
     }

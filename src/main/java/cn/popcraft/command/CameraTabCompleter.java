@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 public class CameraTabCompleter implements TabCompleter {
     private final CameraManager cameraManager;
     private final List<String> MAIN_COMMANDS = Arrays.asList(
-        "enter", "exit", "save", "load", "delete", "list", "play", "stop", "help", "create", "addpoint", "finish", "segment", "random"
+        "enter", "exit", "save", "load", "delete", "list", "play", "stop", "help", "create", "addpoint", "finish", "segment", "random", "playpreset"
     );
     
     private final List<String> RANDOM_SUBCOMMANDS = Arrays.asList(
@@ -45,6 +45,7 @@ public class CameraTabCompleter implements TabCompleter {
             switch (args[0].toLowerCase()) {
                 case "load":
                 case "delete":
+                case "playpreset":
                     // 补全预设名称
                     if (sender.hasPermission("virtualcamera.preset.load") || 
                         sender.hasPermission("virtualcamera.preset.delete")) {
