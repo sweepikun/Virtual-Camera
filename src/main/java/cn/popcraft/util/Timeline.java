@@ -202,4 +202,16 @@ public class Timeline {
     public int getKeyframeCount() {
         return keyframes.size();
     }
+    
+    /**
+     * 获取指定索引的关键帧
+     * @param index 索引
+     * @return 关键帧位置
+     */
+    public Location getKeyframe(int index) {
+        if (index >= 0 && index < keyframes.size()) {
+            return keyframes.get(index);
+        }
+        return null;
+    }
 }

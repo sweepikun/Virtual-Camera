@@ -29,7 +29,8 @@ public class CameraSession {
     private BukkitTask animationTask;
     private long startTime;
     private boolean isPlaying;
-    
+    private Runnable animationCompleteListener; // 新增字段：动画完成监听器
+
     // 为兼容性保留的字段
     private List<Location> pathPoints = new ArrayList<>();
     private long duration;
@@ -101,7 +102,10 @@ public class CameraSession {
      * 设置玩家的原始位置
      * @param originalLocation 原始位置
      */
-    
+    public void setOriginalLocation(Location originalLocation) {
+        this.originalLocation = originalLocation != null ? originalLocation.clone() : null;
+    }
+
     /**
      * 保存玩家的原始游戏模式
      * @param gameMode 原始游戏模式
@@ -116,9 +120,6 @@ public class CameraSession {
      */
     public org.bukkit.GameMode getOriginalGameMode() {
         return originalGameMode;
-    }
-    public void setOriginalLocation(Location originalLocation) {
-        this.originalLocation = originalLocation != null ? originalLocation.clone() : null;
     }
 
     /**
@@ -218,76 +219,77 @@ public class CameraSession {
     }
 
     /**
-     * 启动相机动画
+     * 开始动画播放
      */
     public void startAnimation() {
-        if (timeline.isEmpty()) return;
+        if (timeline == null || timeline.getKeyframeCount() == 0) {
+            return;
+        }
         
-        stopAnimation(); // 停止任何正在进行的动画
+        // 停止任何正在运行的动画
+        stopAnimation();
         
-        this.startTime = System.currentTimeMillis();
-        this.isPlaying = true;
+        // 标记为正在播放
+        isPlaying = true;
+        startTime = System.currentTimeMillis();
         
-        // 创建动画任务
+        // 启动动画任务
         animationTask = Bukkit.getScheduler().runTaskTimer(
-                Bukkit.getPluginManager().getPlugin("VirtualCamera"),
-                this::updateAnimation,
-                1L, 1L // 每tick更新一次
+            player.getServer().getPluginManager().getPlugins()[0], // 获取插件实例
+            this::updateAnimation,
+            0L,
+            1L // 每tick更新一次
         );
     }
 
     /**
-     * 更新动画状态
+     * 更新动画帧
      */
     private void updateAnimation() {
-        if (!isPlaying) return;
+        if (!isPlaying || timeline == null) {
+            return;
+        }
         
         long elapsed = System.currentTimeMillis() - startTime;
-        
-        // 更新相机位置
-        Location location = timeline.getLocationAt(elapsed);
-        if (location != null) {
-            updateCamera(location, location.getYaw(), location.getPitch());
-        }
-        
-        // 检查并执行文本动作
-        List<CameraPreset.TextAction> textActions = timeline.getTextActionsAt(elapsed, 50); // 50ms检查间隔
-        for (CameraPreset.TextAction action : textActions) {
-            player.sendActionBar(ChatColor.translateAlternateColorCodes('&', action.getText()));
+        Location currentLocation = timeline.getLocationAt(elapsed);
+        if (currentLocation != null) {
+            // 使用ProtocolLib控制器更新摄像机位置
+            // 注意：这里需要获取VirtualCameraPlugin实例来访问ProtocolCameraController
+            // 在实际实现中，可能需要通过其他方式传递引用
             
-            // 如果设置了持续时间，调度清除动作
-            if (action.getDuration() > 0) {
-                Bukkit.getScheduler().runTaskLater(
-                        Bukkit.getPluginManager().getPlugin("VirtualCamera"),
-                        () -> player.sendActionBar(""),
-                        action.getDuration() / 50
-                );
-            }
+            // 临时使用原来的传送方法
+            player.teleport(currentLocation);
         }
         
-        // 检查并执行命令动作
-        List<CameraPreset.CommandAction> commandActions = timeline.getCommandActionsAt(elapsed, 50); // 50ms检查间隔
-        for (CameraPreset.CommandAction action : commandActions) {
-            Bukkit.dispatchCommand(Bukkit.getConsoleSender(), action.getCommand());
-        }
-        
-        // 检查是否已完成
+        // 检查动画是否完成
         if (elapsed >= timeline.getTotalDuration()) {
             stopAnimation();
+            
+            // 执行完成回调（如果有）
+            if (animationCompleteListener != null) {
+                animationCompleteListener.run();
+            }
         }
     }
 
     /**
-     * 停止动画
+     * 停止动画播放
      */
     public void stopAnimation() {
         isPlaying = false;
-        if (animationTask != null && !animationTask.isCancelled()) {
+        
+        if (animationTask != null) {
             animationTask.cancel();
             animationTask = null;
         }
-        // 清除动作栏
-        player.sendActionBar("");
+        
+        // 取消所有计划的任务
+        for (BukkitTask task : scheduledTasks) {
+            if (task != null && !task.isCancelled()) {
+                task.cancel();
+            }
+        }
+        scheduledTasks.clear();
     }
 
     /**
@@ -406,7 +408,116 @@ public class CameraSession {
         
         stopAnimation();
     }
-
+    
+    /**
+     * 设置动画完成监听器
+     * @param listener 监听器
+     */
+    public void setAnimationCompleteListener(Runnable listener) {
+        this.animationCompleteListener = listener;
+    }
+    
+    /**
+     * 设置时间轴
+     * @param timeline 时间轴
+     */
+    /*public void setTimeline(Timeline timeline) {
+        this.timeline = timeline;
+    }*/
+    
+    /**
+     * 重置会话状态
+     */
+    /*public void reset() {
+        // 停止任何正在进行的动画
+        stopAnimation();
+        
+        // 重置所有状态
+        activeCamera = new Camera(originalLocation != null ? originalLocation : player.getLocation());
+        inCameraMode = false;
+        ignoreNextMove = false;
+        timeline = new Timeline();
+        pathPoints.clear();
+        scheduledTasks.clear();
+        isPlaying = false;
+        
+        if (animationTask != null) {
+            animationTask.cancel();
+            animationTask = null;
+        }
+    }*/
+    
+    // 删除重复的方法定义，保留原有的reset方法
+    
+    /**
+     * 启用ProtocolLib摄像机模式
+     * @param plugin VirtualCamera插件实例
+     */
+    public void enableProtocolCamera(cn.popcraft.VirtualCameraPlugin plugin) {
+        if (plugin.getProtocolCameraController() != null) {
+            plugin.getProtocolCameraController().startCameraMode(player);
+        }
+    }
+    
+    /**
+     * 禁用ProtocolLib摄像机模式
+     * @param plugin VirtualCamera插件实例
+     */
+    public void disableProtocolCamera(cn.popcraft.VirtualCameraPlugin plugin) {
+        if (plugin.getProtocolCameraController() != null) {
+            plugin.getProtocolCameraController().stopCameraMode(player);
+        }
+    }
+    
+    /**
+     * 使用ProtocolLib设置摄像机位置
+     * @param plugin VirtualCamera插件实例
+     * @param location 位置
+     */
+    public void setProtocolCameraPosition(cn.popcraft.VirtualCameraPlugin plugin, Location location) {
+        if (plugin.getProtocolCameraController() != null) {
+            plugin.getProtocolCameraController().setCameraPosition(player, location);
+        }
+    }
+    
+    /**
+     * 使用ProtocolLib播放摄像机动画
+     * @param plugin VirtualCamera插件实例
+     * @param timeline 时间轴
+     * @param duration 持续时间(毫秒)
+     */
+    public void playProtocolCameraAnimation(cn.popcraft.VirtualCameraPlugin plugin, Timeline timeline, long duration) {
+        if (plugin.getProtocolCameraController() != null) {
+            // 停止当前动画
+            stopAnimation();
+            
+            // 标记为正在播放
+            isPlaying = true;
+            startTime = System.currentTimeMillis();
+            
+            plugin.getProtocolCameraController().playCameraAnimation(player, 
+                convertToProtocolTimeline(timeline), duration);
+        }
+    }
+    
+    /**
+     * 转换时间轴格式以适配ProtocolLib控制器
+     * @param timeline 原始时间轴
+     * @return ProtocolLib兼容的时间轴
+     */
+    private cn.popcraft.util.ProtocolCameraController.Timeline convertToProtocolTimeline(Timeline timeline) {
+        cn.popcraft.util.ProtocolCameraController.Timeline protocolTimeline = 
+            new cn.popcraft.util.ProtocolCameraController.Timeline();
+            
+        // 复制关键帧
+        for (int i = 0; i < timeline.getKeyframeCount(); i++) {
+            float progress = (float) i / Math.max(1, timeline.getKeyframeCount() - 1);
+            protocolTimeline.addKeyframe(progress, timeline.getKeyframe(i));
+        }
+        
+        return protocolTimeline;
+    }
+    
     /**
      * 重置会话状态
      */

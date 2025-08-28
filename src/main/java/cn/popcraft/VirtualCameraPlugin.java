@@ -8,6 +8,7 @@ import cn.popcraft.command.CameraCommand;
 import cn.popcraft.command.CameraTabCompleter;
 import cn.popcraft.listener.CameraListener;
 import cn.popcraft.session.SessionManager;
+import cn.popcraft.util.ProtocolCameraController;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -17,6 +18,7 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
     private RandomSwitchController randomController;
     private CameraManager cameraManager;
     private SessionManager sessionManager;
+    private ProtocolCameraController protocolCameraController;
     
     @Override
     public void onEnable() {
@@ -29,6 +31,7 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
         randomController = new RandomSwitchController(this);
         sessionManager = new SessionManagerImpl(this);
         cameraManager = new CameraManager(this, sessionManager);
+        protocolCameraController = new ProtocolCameraController(this);
         
         // 注册命令
         CameraCommand cameraCommand = new CameraCommand(this, sessionManager, cameraManager);
@@ -51,7 +54,7 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
         getLogger().info("VirtualCamera 已禁用!");
     }
     
-    // Getter ����
+    // Getter 方法
     public CameraPresetManager getPresetManager() {
         return presetManager;
     }
@@ -76,5 +79,9 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
     @Override
     public Plugin getPlugin() {
         return this;
+    }
+    
+    public ProtocolCameraController getProtocolCameraController() {
+        return protocolCameraController;
     }
 }

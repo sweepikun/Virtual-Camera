@@ -57,6 +57,9 @@ public class CameraManager {
         
         // 从单独的预设文件加载预设
         loadAllPresets();
+        
+        // 从单独的序列文件加载序列
+        loadAllSequences();
     }
     
     /**
@@ -106,7 +109,31 @@ public class CameraManager {
         
         // 设置时间轴并启动动画
         session.setTimeline(timeline);
-        session.startAnimation();
+        
+        // 使用ProtocolLib摄像机控制器播放动画（如果可用）
+        if (plugin instanceof cn.popcraft.VirtualCameraPlugin) {
+            cn.popcraft.VirtualCameraPlugin vcPlugin = (cn.popcraft.VirtualCameraPlugin) plugin;
+            if (vcPlugin.getProtocolCameraController() != null) {
+                // 计算总持续时间
+                long totalDuration = 0;
+                for (CameraPreset.SegmentInfo segmentInfo : preset.getSegmentInfos()) {
+                    totalDuration += segmentInfo.getDuration();
+                }
+                
+                // 如果没有段落信息，则使用默认时间
+                if (totalDuration == 0 && preset.getLocationCount() > 1) {
+                    totalDuration = (preset.getLocationCount() - 1) * 3000; // 默认每段3秒
+                }
+                
+                session.playProtocolCameraAnimation(vcPlugin, timeline, totalDuration);
+            } else {
+                // 回退到原来的实现
+                session.startAnimation();
+            }
+        } else {
+            // 回退到原来的实现
+            session.startAnimation();
+        }
         
         return true;
     }
@@ -374,31 +401,51 @@ public class CameraManager {
      * 保存序列到配置文件
      */
     public void saveToConfig() {
-        FileConfiguration config = plugin.getPlugin().getConfig();
-        
-        // 只清除序列数据，保留预设部分
-        config.set("sequences", null);
-        
-        // 保存序列
+        // 保存每个序列到单独的文件
         for (Map.Entry<String, CameraSequence> entry : sequences.entrySet()) {
             String sequenceName = entry.getKey();
             CameraSequence sequence = entry.getValue();
+            saveSequenceToFile(sequenceName, sequence);
+        }
+    }
+
+    /**
+     * 保存序列到单独的YML文件
+     * @param sequenceName 序列名称
+     * @param sequence 序列对象
+     */
+    public void saveSequenceToFile(String sequenceName, CameraSequence sequence) {
+        try {
+            File sequencesDir = new File(plugin.getPlugin().getDataFolder(), "sequences");
+            if (!sequencesDir.exists()) {
+                sequencesDir.mkdirs();
+            }
             
-            String path = "sequences." + sequenceName + ".";
-            config.set(path + "loop", sequence.isLoop());
+            File sequenceFile = new File(sequencesDir, sequenceName + ".yml");
+            FileConfiguration sequenceConfig = YamlConfiguration.loadConfiguration(sequenceFile);
             
-            // 保存序列条目
+            // 清除旧数据
+            sequenceConfig.set(sequenceName, null);
+            
+            // 保存序列数据 (使用扁平格式)
+            sequenceConfig.set("loop", sequence.isLoop());
+            
+            // 保存序列条目 (使用列表格式)
+            List<Map<String, Object>> entries = new ArrayList<>();
             for (int i = 0; i < sequence.getEntryCount(); i++) {
                 CameraSequence.SequenceEntry sequenceEntry = sequence.getEntry(i);
-                String entryPath = path + "entries." + i + ".";
-                
-                config.set(entryPath + "preset", sequenceEntry.getPresetName());
-                config.set(entryPath + "duration", sequenceEntry.getDuration());
+                Map<String, Object> entryMap = new HashMap<>();
+                entryMap.put("preset", sequenceEntry.getPresetName());
+                entryMap.put("duration", sequenceEntry.getDuration());
+                entries.add(entryMap);
             }
+            sequenceConfig.set("entries", entries);
+            
+            // 保存到文件
+            sequenceConfig.save(sequenceFile);
+        } catch (IOException e) {
+            plugin.getPlugin().getLogger().severe("无法保存序列文件 " + sequenceName + ": " + e.getMessage());
         }
-        
-        // 保存配置
-        plugin.getPlugin().saveConfig();
     }
 
     /**
@@ -907,5 +954,68 @@ public class CameraManager {
         cleanup();
         
         // 可以添加其他会话清理逻辑
+    }
+    
+    /**
+     * 从文件加载序列
+     * @param sequenceName 序列名称
+     * @return 相机序列，如果不存在则返回null
+     */
+    public CameraSequence loadSequenceFromFile(String sequenceName) {
+        try {
+            File sequenceFile = new File(plugin.getPlugin().getDataFolder(), "sequences/" + sequenceName + ".yml");
+            if (!sequenceFile.exists()) {
+                return null;
+            }
+            
+            FileConfiguration sequenceConfig = YamlConfiguration.loadConfiguration(sequenceFile);
+            
+            CameraSequence sequence = new CameraSequence(sequenceName);
+            
+            // 加载循环设置
+            boolean loop = sequenceConfig.getBoolean("loop", false);
+            sequence.setLoop(loop);
+            
+            // 加载序列条目 (支持列表格式)
+            List<Map<?, ?>> entriesList = sequenceConfig.getMapList("entries");
+            if (entriesList != null) {
+                for (Map<?, ?> entryMap : entriesList) {
+                    String presetName = (String) entryMap.get("preset");
+                    double duration = ((Number) entryMap.get("duration")).doubleValue();
+                    
+                    if (presetName != null) {
+                        sequence.addEntry(presetName, duration);
+                    }
+                }
+            }
+            
+            return sequence;
+        } catch (Exception e) {
+            plugin.getPlugin().getLogger().severe("加载序列文件失败 " + sequenceName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 从sequences目录加载所有序列
+     */
+    public void loadAllSequences() {
+        File sequencesDir = new File(plugin.getPlugin().getDataFolder(), "sequences");
+        if (!sequencesDir.exists()) {
+            return;
+        }
+        
+        File[] sequenceFiles = sequencesDir.listFiles((dir, name) -> name.endsWith(".yml"));
+        if (sequenceFiles == null) {
+            return;
+        }
+        
+        for (File sequenceFile : sequenceFiles) {
+            String sequenceName = sequenceFile.getName().replace(".yml", "");
+            CameraSequence sequence = loadSequenceFromFile(sequenceName);
+            if (sequence != null) {
+                sequences.put(sequenceName, sequence);
+            }
+        }
     }
 }
