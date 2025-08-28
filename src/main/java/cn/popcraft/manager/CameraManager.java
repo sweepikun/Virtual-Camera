@@ -1,21 +1,20 @@
 package cn.popcraft.manager;
 
 import cn.popcraft.VirtualCamera;
-import cn.popcraft.model.Camera;
 import cn.popcraft.model.CameraPreset;
-import cn.popcraft.model.CameraSequence;
 import cn.popcraft.model.TransitionType;
 import cn.popcraft.session.CameraSession;
 import cn.popcraft.session.SessionManager;
 import cn.popcraft.util.Timeline;
+import cn.popcraft.model.Camera;
 import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.World;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.configuration.ConfigurationSection;
 
 import java.io.File;
 import java.io.IOException;
@@ -71,7 +70,12 @@ public class CameraManager {
     public boolean switchToPreset(Player player, String presetName) {
         CameraPreset preset = plugin.getPresetManager().getPreset(presetName);
         if (preset == null || preset.getLocations().isEmpty()) {
-            return false;
+            // 尝试从CameraManager中获取预设
+            preset = presets.get(presetName);
+            if (preset == null || preset.getLocations().isEmpty()) {
+                player.sendMessage(ChatColor.RED + ChatColor.translateAlternateColorCodes('&', "找不到预设: " + presetName));
+                return false;
+            }
         }
         
         CameraSession session = sessionManager.getSession(player);
@@ -135,6 +139,7 @@ public class CameraManager {
             session.startAnimation();
         }
         
+        player.sendMessage(ChatColor.GREEN + ChatColor.translateAlternateColorCodes('&', "开始播放预设: " + presetName));
         return true;
     }
 
@@ -606,6 +611,20 @@ public class CameraManager {
             }
             presetConfig.set("locations", locations);
             
+            // 保存段落信息 (使用列表格式)
+            List<Map<String, Object>> segments = new ArrayList<>();
+            for (int i = 0; i < preset.getSegmentInfos().size(); i++) {
+                CameraPreset.SegmentInfo segmentInfo = preset.getSegmentInfos().get(i);
+                Map<String, Object> segmentMap = new HashMap<>();
+                segmentMap.put("index", i);
+                segmentMap.put("transition", segmentInfo.getTransitionType().name());
+                segmentMap.put("duration", segmentInfo.getDuration());
+                segments.add(segmentMap);
+            }
+            if (!segments.isEmpty()) {
+                presetConfig.set("segments", segments);
+            }
+            
             // 保存命令 (使用列表格式)
             List<Map<String, Object>> commands = new ArrayList<>();
             for (CameraPreset.CommandAction cmd : preset.getCommands()) {
@@ -684,6 +703,7 @@ public class CameraManager {
                 for (Map<?, ?> cmdMap : commandsList) {
                     String command = (String) cmdMap.get("command");
                     long delay = ((Number) cmdMap.get("delay")).longValue();
+                    
                     if (command != null) {
                         preset.addCommand(command, delay);
                     }
@@ -697,8 +717,28 @@ public class CameraManager {
                     String text = (String) textMap.get("text");
                     long delay = ((Number) textMap.get("delay")).longValue();
                     long duration = ((Number) textMap.get("duration")).longValue();
+                    
                     if (text != null) {
                         preset.addText(text, delay, duration);
+                    }
+                }
+            }
+            
+            // 加载段落信息 (支持列表格式)
+            List<Map<?, ?>> segmentsList = presetConfig.getMapList("segments");
+            if (segmentsList != null) {
+                for (Map<?, ?> segmentMap : segmentsList) {
+                    int index = ((Number) segmentMap.get("index")).intValue();
+                    String transitionStr = (String) segmentMap.get("transition");
+                    long duration = ((Number) segmentMap.get("duration")).longValue();
+                    
+                    if (transitionStr != null) {
+                        try {
+                            TransitionType transitionType = TransitionType.valueOf(transitionStr);
+                            preset.setSegmentInfo(index, transitionType, duration);
+                        } catch (IllegalArgumentException e) {
+                            preset.setSegmentInfo(index, TransitionType.SMOOTH, duration);
+                        }
                     }
                 }
             }
@@ -833,6 +873,15 @@ public class CameraManager {
      */
     public Map<String, CameraPreset> getAllPresets() {
         return new HashMap<>(presets);
+    }
+    
+    /**
+     * 添加预设到内存映射
+     * @param presetName 预设名称
+     * @param preset 预设对象
+     */
+    public void addPreset(String presetName, CameraPreset preset) {
+        presets.put(presetName, preset);
     }
 
     /**

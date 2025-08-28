@@ -1,5 +1,5 @@
 name: VirtualCamera
-version: 1.2.4
+version: 1.2.5
 main: cn.popcraft.VirtualCameraPlugin
 api-version: 1.16
 description: 一个虚拟相机插件，用于创建电影效果和场景展示

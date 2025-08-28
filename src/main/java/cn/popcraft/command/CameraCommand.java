@@ -1,13 +1,11 @@
 package cn.popcraft.command;
 
-import cn.popcraft.VirtualCameraPlugin;
+import cn.popcraft.VirtualCamera;
 import cn.popcraft.manager.CameraManager;
-import cn.popcraft.manager.RandomSwitchController;
 import cn.popcraft.model.CameraPreset;
-import cn.popcraft.model.CameraSequence;
 import cn.popcraft.model.TransitionType;
 import cn.popcraft.session.CameraSession;
-import cn.popcraft.session.SessionManager;
+import cn.popcraft.model.CameraSequence;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.command.Command;
@@ -15,7 +13,6 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -263,6 +260,8 @@ public class CameraCommand implements CommandExecutor {
         // 保存预设到内存和文件
         plugin.getPresetManager().addPreset(presetName, preset);
         cameraManager.savePresetToFile(presetName, preset);
+        // 同时更新CameraManager中的预设列表
+        cameraManager.addPreset(presetName, preset);
         
         // 清理临时数据
         presetCreationData.remove(playerId);
