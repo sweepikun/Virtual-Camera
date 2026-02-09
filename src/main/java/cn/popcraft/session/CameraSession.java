@@ -226,19 +226,22 @@ public class CameraSession {
             return;
         }
         
-        // 停止任何正在运行的动画
         stopAnimation();
         
-        // 标记为正在播放
         isPlaying = true;
         startTime = System.currentTimeMillis();
         
-        // 启动动画任务
+        org.bukkit.plugin.Plugin plugin = Bukkit.getPluginManager().getPlugin("VirtualCamera");
+        if (plugin == null) {
+            isPlaying = false;
+            return;
+        }
+        
         animationTask = Bukkit.getScheduler().runTaskTimer(
-            player.getServer().getPluginManager().getPlugins()[0], // 获取插件实例
+            plugin,
             this::updateAnimation,
             0L,
-            1L // 每tick更新一次
+            1L
         );
     }
 
@@ -252,20 +255,13 @@ public class CameraSession {
         
         long elapsed = System.currentTimeMillis() - startTime;
         Location currentLocation = timeline.getLocationAt(elapsed);
-        if (currentLocation != null) {
-            // 使用ProtocolLib控制器更新摄像机位置
-            // 注意：这里需要获取VirtualCameraPlugin实例来访问ProtocolCameraController
-            // 在实际实现中，可能需要通过其他方式传递引用
-            
-            // 临时使用原来的传送方法
+        if (currentLocation != null && currentLocation.getWorld() != null) {
             player.teleport(currentLocation);
         }
         
-        // 检查动画是否完成
         if (elapsed >= timeline.getTotalDuration()) {
             stopAnimation();
             
-            // 执行完成回调（如果有）
             if (animationCompleteListener != null) {
                 animationCompleteListener.run();
             }
@@ -488,34 +484,14 @@ public class CameraSession {
      */
     public void playProtocolCameraAnimation(cn.popcraft.VirtualCameraPlugin plugin, Timeline timeline, long duration) {
         if (plugin.getProtocolCameraController() != null) {
-            // 停止当前动画
             stopAnimation();
             
-            // 标记为正在播放
             isPlaying = true;
             startTime = System.currentTimeMillis();
             
-            plugin.getProtocolCameraController().playCameraAnimation(player, 
-                convertToProtocolTimeline(timeline), duration);
+            plugin.getProtocolCameraController().startCameraMode(player);
+            plugin.getProtocolCameraController().playCameraAnimation(player, timeline, duration);
         }
-    }
-    
-    /**
-     * 转换时间轴格式以适配ProtocolLib控制器
-     * @param timeline 原始时间轴
-     * @return ProtocolLib兼容的时间轴
-     */
-    private cn.popcraft.util.ProtocolCameraController.Timeline convertToProtocolTimeline(Timeline timeline) {
-        cn.popcraft.util.ProtocolCameraController.Timeline protocolTimeline = 
-            new cn.popcraft.util.ProtocolCameraController.Timeline();
-            
-        // 复制关键帧
-        for (int i = 0; i < timeline.getKeyframeCount(); i++) {
-            float progress = (float) i / Math.max(1, timeline.getKeyframeCount() - 1);
-            protocolTimeline.addKeyframe(progress, timeline.getKeyframe(i));
-        }
-        
-        return protocolTimeline;
     }
     
     /**
