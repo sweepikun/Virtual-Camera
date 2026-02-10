@@ -46,10 +46,13 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
     
     @Override
     public void onDisable() {
-        // 清理所有活动会话
         cameraManager.cleanupAllSessions();
         sequenceController.cleanupAllSequences();
         randomController.cleanupAllRandomSwitches();
+        
+        if (protocolCameraController != null) {
+            protocolCameraController.cleanup();
+        }
         
         getLogger().info("VirtualCamera 已禁用!");
     }

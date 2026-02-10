@@ -483,20 +483,23 @@ public class CameraManager {
     public void exitCameraMode(Player player) {
         CameraSession session = sessionManager.getSession(player);
         if (session.isInCameraMode()) {
-            // 停止任何正在播放的序列
             stopSequence(player);
             
-            // 恢复玩家原始位置
+            if (plugin instanceof cn.popcraft.VirtualCameraPlugin) {
+                cn.popcraft.VirtualCameraPlugin vcPlugin = (cn.popcraft.VirtualCameraPlugin) plugin;
+                if (vcPlugin.getProtocolCameraController() != null) {
+                    vcPlugin.getProtocolCameraController().stopCameraMode(player);
+                }
+            }
+            
             Location originalLocation = session.getOriginalLocation();
             if (originalLocation != null) {
                 player.teleport(originalLocation);
             }
             
-            // 清除相机模式标志和相机实例
             session.setInCameraMode(false);
             session.setCamera(null);
             
-            // 恢复玩家状态（例如，显示HUD、恢复游戏模式等）
             restorePlayerState(player);
         }
     }
