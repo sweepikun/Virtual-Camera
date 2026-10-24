@@ -4,6 +4,8 @@ main: cn.popcraft.VirtualCameraPlugin
 api-version: 1.16
 description: 一个虚拟相机插件，用于创建电影效果和场景展示
 author: PopCraft
+# ProtocolLib 为软依赖：未安装时协议运镜降级为传送运镜，插件仍可加载
+softdepend: [ProtocolLib]
 
 commands:
   camera:

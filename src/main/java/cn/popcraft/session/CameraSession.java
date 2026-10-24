@@ -30,6 +30,8 @@ public class CameraSession {
     private long startTime;
     private boolean isPlaying;
     private Runnable animationCompleteListener; // 新增字段：动画完成监听器
+    private int animationTicks; // 动画以tick计数推进，避免墙钟与tick不同步造成的抖动
+    private Location lastAnimationLocation; // 上一次实际发送的位置，用于去掉重复传送
 
     // 为兼容性保留的字段
     private List<Location> pathPoints = new ArrayList<>();
@@ -225,18 +227,20 @@ public class CameraSession {
         if (timeline == null || timeline.getKeyframeCount() == 0) {
             return;
         }
-        
+
         stopAnimation();
-        
+
         isPlaying = true;
         startTime = System.currentTimeMillis();
-        
+        animationTicks = 0;
+        lastAnimationLocation = null;
+
         org.bukkit.plugin.Plugin plugin = Bukkit.getPluginManager().getPlugin("VirtualCamera");
         if (plugin == null) {
             isPlaying = false;
             return;
         }
-        
+
         animationTask = Bukkit.getScheduler().runTaskTimer(
             plugin,
             this::updateAnimation,
@@ -246,22 +250,38 @@ public class CameraSession {
     }
 
     /**
-     * 更新动画帧
+     * 更新动画帧。
+     * 进度由tick计数推导而不是墙钟：服务器掉帧时动画只会整体放缓，
+     * 不会出现一次传送跳过很大距离导致的画面卡顿。
      */
     private void updateAnimation() {
         if (!isPlaying || timeline == null) {
             return;
         }
-        
-        long elapsed = System.currentTimeMillis() - startTime;
+
+        long elapsed = animationTicks * 50L;
         Location currentLocation = timeline.getLocationAt(elapsed);
-        if (currentLocation != null && currentLocation.getWorld() != null) {
-            player.teleport(currentLocation);
+        if (currentLocation != null) {
+            Location loc = currentLocation.clone();
+            if (loc.getWorld() == null) {
+                loc.setWorld(player.getWorld());
+            }
+            // 与上一帧完全一致时不再传送，减少每个tick的包量
+            if (lastAnimationLocation == null
+                    || lastAnimationLocation.getX() != loc.getX()
+                    || lastAnimationLocation.getY() != loc.getY()
+                    || lastAnimationLocation.getZ() != loc.getZ()
+                    || lastAnimationLocation.getYaw() != loc.getYaw()
+                    || lastAnimationLocation.getPitch() != loc.getPitch()) {
+                player.teleport(loc);
+                lastAnimationLocation = loc;
+            }
         }
-        
+        animationTicks++;
+
         if (elapsed >= timeline.getTotalDuration()) {
             stopAnimation();
-            
+
             if (animationCompleteListener != null) {
                 animationCompleteListener.run();
             }
@@ -478,20 +498,38 @@ public class CameraSession {
     
     /**
      * 使用ProtocolLib播放摄像机动画
+     * ProtocolLib 不可用时自动回退到玩家传送运镜
      * @param plugin VirtualCamera插件实例
      * @param timeline 时间轴
      * @param duration 持续时间(毫秒)
      */
     public void playProtocolCameraAnimation(cn.popcraft.VirtualCameraPlugin plugin, Timeline timeline, long duration) {
-        if (plugin.getProtocolCameraController() != null) {
-            stopAnimation();
-            
-            isPlaying = true;
-            startTime = System.currentTimeMillis();
-            
-            plugin.getProtocolCameraController().startCameraMode(player);
-            plugin.getProtocolCameraController().playCameraAnimation(player, timeline, duration);
+        cn.popcraft.util.ProtocolCameraController controller = plugin.getProtocolCameraController();
+        if (controller == null || !controller.isAvailable()) {
+            setTimeline(timeline);
+            startAnimation();
+            return;
         }
+
+        stopAnimation();
+
+        isPlaying = true;
+        startTime = System.currentTimeMillis();
+
+        controller.startCameraMode(player);
+        controller.playCameraAnimation(player, timeline, duration);
+    }
+
+    /**
+     * 结束ProtocolLib摄像机动画（保持摄像机会话）
+     */
+    public void stopProtocolCameraAnimation(cn.popcraft.VirtualCameraPlugin plugin) {
+        cn.popcraft.util.ProtocolCameraController controller = plugin.getProtocolCameraController();
+        if (controller == null) {
+            return;
+        }
+        controller.stopAnimation(player);
+        isPlaying = false;
     }
     
     /**

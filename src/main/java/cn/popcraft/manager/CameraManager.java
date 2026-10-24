@@ -63,12 +63,20 @@ public class CameraManager {
     }
     
     /**
-     * 切换到指定预设
+     * 切换到指定预设（/vcam playpreset）
      * @param player 玩家
      * @param presetName 预设名称
      * @return 是否成功切换
      */
     public boolean switchToPreset(Player player, String presetName) {
+        return playPreset(player, presetName);
+    }
+
+    /**
+     * 播放预设：与 loadPreset 共用同一条链路，保证 /vcam load 与 /vcam playpreset
+     * 都真正走协议摄像机，而不是一个走协议、另一个只传送玩家本体
+     */
+    public boolean playPreset(Player player, String presetName) {
         CameraPreset preset = plugin.getPresetManager().getPreset(presetName);
         if (preset == null || preset.getLocations().isEmpty()) {
             // 尝试从CameraManager中获取预设
@@ -78,70 +86,70 @@ public class CameraManager {
                 return false;
             }
         }
-        
+
         CameraSession session = sessionManager.getSession(player);
-        
+
         // 如果玩家不在相机模式，先进入相机模式
         if (!session.isInCameraMode()) {
             enterCameraMode(player);
         }
-        
+
         // 构建时间轴
+        Timeline timeline = buildTimeline(player, preset);
+        session.setTimeline(timeline);
+
+        // 计算总持续时间：先取时间轴自身（段落+文本+命令），没有信息时按默认每段3秒
+        long totalDuration = timeline.getTotalDuration();
+        if (totalDuration <= 0 && preset.getLocationCount() > 1) {
+            totalDuration = (preset.getLocationCount() - 1) * 3000; // 默认每段3秒
+        }
+        if (totalDuration <= 0) {
+            totalDuration = 1000;
+        }
+
+        if (plugin instanceof cn.popcraft.VirtualCameraPlugin) {
+            cn.popcraft.VirtualCameraPlugin vcPlugin = (cn.popcraft.VirtualCameraPlugin) plugin;
+            session.playProtocolCameraAnimation(vcPlugin, timeline, totalDuration);
+        } else {
+            // 非标准主类：走回退路径，避免类型转换异常
+            session.setTimeline(timeline);
+            session.startAnimation();
+        }
+
+        player.sendMessage(ChatColor.GREEN + ChatColor.translateAlternateColorCodes('&', "开始播放预设: " + presetName));
+        return true;
+    }
+
+    /**
+     * 由预设构建时间轴：路径点 + 段落过渡 + 文本动作 + 命令动作
+     */
+    private Timeline buildTimeline(Player player, CameraPreset preset) {
         Timeline timeline = new Timeline();
-        
+
         // 添加路径点(使用玩家当前世界)
         for (Location loc : preset.getLocations()) {
             Location newLoc = loc.clone();
             newLoc.setWorld(player.getWorld());
             timeline.addKeyframe(newLoc);
         }
-        
+
         // 设置每个段落的过渡类型和持续时间
         for (int i = 0; i < preset.getSegmentInfos().size(); i++) {
             CameraPreset.SegmentInfo segmentInfo = preset.getSegmentInfos().get(i);
             timeline.setSegmentTransition(i, segmentInfo.getTransitionType(), segmentInfo.getDuration());
         }
-        
+
         // 添加文本动作
         for (CameraPreset.TextAction text : preset.getTexts()) {
             timeline.addTextAction(text.getDelay(), text);
         }
-        
+
         // 添加命令动作
         for (CameraPreset.CommandAction cmd : preset.getCommands()) {
             timeline.addCommandAction(cmd.getDelay(), cmd);
         }
-        
-        // 设置时间轴并启动动画
-        session.setTimeline(timeline);
-        
-        // 使用ProtocolLib摄像机控制器播放动画（如果可用）
-        if (plugin instanceof cn.popcraft.VirtualCameraPlugin) {
-            cn.popcraft.VirtualCameraPlugin vcPlugin = (cn.popcraft.VirtualCameraPlugin) plugin;
-            if (vcPlugin.getProtocolCameraController() != null) {
-                // 计算总持续时间
-                long totalDuration = 0;
-                for (CameraPreset.SegmentInfo segmentInfo : preset.getSegmentInfos()) {
-                    totalDuration += segmentInfo.getDuration();
-                }
-                
-                // 如果没有段落信息，则使用默认时间
-                if (totalDuration == 0 && preset.getLocationCount() > 1) {
-                    totalDuration = (preset.getLocationCount() - 1) * 3000; // 默认每段3秒
-                }
-                
-                session.playProtocolCameraAnimation(vcPlugin, timeline, totalDuration);
-            } else {
-                // 回退到原来的实现
-                session.startAnimation();
-            }
-        } else {
-            // 回退到原来的实现
-            session.startAnimation();
-        }
-        
-        player.sendMessage(ChatColor.GREEN + ChatColor.translateAlternateColorCodes('&', "开始播放预设: " + presetName));
-        return true;
+
+        return timeline;
     }
 
     /**
@@ -456,24 +464,28 @@ public class CameraManager {
 
     /**
      * 进入相机模式
+     * 协议可用时直接把客户端视角绑到摄像机实体（"灵魂出窍"，玩家能看到自己的身体）；
+     * 协议不可用时才回退为传送玩家本体。
      * @param player 玩家
      */
     public void enterCameraMode(Player player) {
         CameraSession session = sessionManager.getSession(player);
-        if (!session.isInCameraMode()) {
-            // 保存玩家当前位置
-            session.saveOriginalLocation(player.getLocation());
-            
-            // 设置相机模式标志
-            session.setInCameraMode(true);
-            
-            // 创建相机实例
-            Camera camera = new Camera(player.getLocation());
-            session.setCamera(camera);
-            
-            // 应用相机效果（例如，隐藏HUD、切换到旁观模式等）
-            applyCamera(player, camera);
+        if (session.isInCameraMode()) {
+            return;
         }
+
+        // 保存玩家当前位置
+        session.saveOriginalLocation(player.getLocation());
+
+        // 设置相机模式标志
+        session.setInCameraMode(true);
+
+        // 创建相机实例（记录玩家当前站位，供 /vcam save 取用）
+        Camera camera = new Camera(player.getLocation());
+        session.setCamera(camera);
+
+        // 应用相机效果（例如，隐藏HUD、切换到旁观模式等）
+        applyCamera(player, camera);
     }
 
     /**
@@ -484,22 +496,25 @@ public class CameraManager {
         CameraSession session = sessionManager.getSession(player);
         if (session.isInCameraMode()) {
             stopSequence(player);
-            
+
             if (plugin instanceof cn.popcraft.VirtualCameraPlugin) {
                 cn.popcraft.VirtualCameraPlugin vcPlugin = (cn.popcraft.VirtualCameraPlugin) plugin;
                 if (vcPlugin.getProtocolCameraController() != null) {
+                    // 先结束动画（客户端才不再被取消移动包），再把视角交回玩家本体
+                    session.stopProtocolCameraAnimation(vcPlugin);
                     vcPlugin.getProtocolCameraController().stopCameraMode(player);
                 }
             }
-            
+
             Location originalLocation = session.getOriginalLocation();
             if (originalLocation != null) {
                 player.teleport(originalLocation);
             }
-            
+
             session.setInCameraMode(false);
             session.setCamera(null);
-            
+            session.stopAnimation();
+
             restorePlayerState(player);
         }
     }
@@ -510,25 +525,35 @@ public class CameraManager {
      * @param camera 相机实例
      */
     private void applyCamera(Player player, Camera camera) {
-        // 根据相机类型应用不同效果
+        boolean bound = false;
+        if (plugin instanceof cn.popcraft.VirtualCameraPlugin) {
+            cn.popcraft.VirtualCameraPlugin vcPlugin = (cn.popcraft.VirtualCameraPlugin) plugin;
+            if (vcPlugin.getProtocolCameraController() != null
+                    && vcPlugin.getProtocolCameraController().isAvailable()) {
+                vcPlugin.getProtocolCameraController().startCameraMode(player);
+                bound = true;
+            }
+        }
+
+        if (bound) {
+            // 玩家本体保持不动，运动全部由摄像机实体承担，
+            // 避免"传送玩家 + 移动摄像机实体"两套坐标系统互相打架造成的抖动
+            return;
+        }
+
+        // 回退路径：根据相机类型直接移动玩家本体
         switch (camera.getType()) {
             case NORMAL:
-                // 普通相机模式，只是移动玩家
+            case CINEMATIC:
                 player.teleport(camera.toLocation(player.getWorld()));
                 break;
             case SPECTATOR:
-                // 旁观者模式相机
                 player.teleport(camera.toLocation(player.getWorld()));
                 // 保存玩家原始游戏模式
                 sessionManager.getSession(player).saveOriginalGameMode(player.getGameMode());
                 // 切换到旁观模式
                 player.setAllowFlight(true);
                 player.setFlying(true);
-                break;
-            case CINEMATIC:
-                // 电影模式相机（可以添加额外效果，如隐藏HUD）
-                player.teleport(camera.toLocation(player.getWorld()));
-                // 可以使用数据包或其他方法隐藏HUD
                 break;
         }
     }
@@ -778,15 +803,13 @@ public class CameraManager {
     }
 
     /**
-     * 加载预设
-     * @param player 玩家
-     * @param presetName 预设名称
-     * @return 是否成功加载
+     * 加载预设（/vcam load）
+     * 与 playPreset 共用同一条链路，确保协议摄像机在所有播放入口都生效
      */
     public boolean loadPreset(Player player, String presetName) {
         // 首先尝试从内存中获取预设
         CameraPreset preset = presets.get(presetName);
-        
+
         // 如果内存中没有，则尝试从文件加载
         if (preset == null) {
             preset = loadPresetFromFile(presetName);
@@ -795,49 +818,12 @@ public class CameraManager {
                 presets.put(presetName, preset);
             }
         }
-        
+
         if (preset == null) {
             return false;
         }
-        
-        CameraSession session = sessionManager.getSession(player);
-        
-        // 如果玩家不在相机模式，先进入相机模式
-        if (!session.isInCameraMode()) {
-            enterCameraMode(player);
-        }
-        
-        // 构建时间轴
-        Timeline timeline = new Timeline();
-        
-        // 添加路径点(使用玩家当前世界)
-        for (Location loc : preset.getLocations()) {
-            Location newLoc = loc.clone();
-            newLoc.setWorld(player.getWorld());
-            timeline.addKeyframe(newLoc);
-        }
-        
-        // 设置每个段落的过渡类型和持续时间
-        for (int i = 0; i < preset.getSegmentInfos().size(); i++) {
-            CameraPreset.SegmentInfo segmentInfo = preset.getSegmentInfos().get(i);
-            timeline.setSegmentTransition(i, segmentInfo.getTransitionType(), segmentInfo.getDuration());
-        }
-        
-        // 添加文本动作
-        for (CameraPreset.TextAction text : preset.getTexts()) {
-            timeline.addTextAction(text.getDelay(), text);
-        }
-        
-        // 添加命令动作
-        for (CameraPreset.CommandAction cmd : preset.getCommands()) {
-            timeline.addCommandAction(cmd.getDelay(), cmd);
-        }
-        
-        // 设置时间轴并启动动画
-        session.setTimeline(timeline);
-        session.startAnimation();
-        
-        return true;
+
+        return playPreset(player, presetName);
     }
 
     /**
@@ -983,6 +969,12 @@ public class CameraManager {
         // 停止当前动画
         CameraSession session = sessionManager.getSession(player);
         session.stopAnimation();
+        if (plugin instanceof cn.popcraft.VirtualCameraPlugin) {
+            cn.popcraft.VirtualCameraPlugin vcPlugin = (cn.popcraft.VirtualCameraPlugin) plugin;
+            if (vcPlugin.getProtocolCameraController() != null) {
+                session.stopProtocolCameraAnimation(vcPlugin);
+            }
+        }
     }
 
     /**

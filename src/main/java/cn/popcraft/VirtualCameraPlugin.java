@@ -31,7 +31,14 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
         randomController = new RandomSwitchController(this);
         sessionManager = new SessionManagerImpl(this);
         cameraManager = new CameraManager(this, sessionManager);
-        protocolCameraController = new ProtocolCameraController(this);
+
+        // ProtocolLib 是软依赖：缺失时协议运镜降级，插件仍须能正常加载
+        try {
+            protocolCameraController = new ProtocolCameraController(this);
+        } catch (Throwable t) {
+            getLogger().warning("ProtocolLib 初始化失败，协议运镜不可用，已回退为传送运镜: " + t.getMessage());
+            protocolCameraController = null;
+        }
         
         // 注册命令
         CameraCommand cameraCommand = new CameraCommand(this, sessionManager, cameraManager);
@@ -86,5 +93,12 @@ public class VirtualCameraPlugin extends JavaPlugin implements VirtualCamera {
     
     public ProtocolCameraController getProtocolCameraController() {
         return protocolCameraController;
+    }
+
+    /**
+     * 协议运镜是否真正可用（ProtocolLib 已安装且初始化成功）
+     */
+    public boolean isProtocolCameraAvailable() {
+        return protocolCameraController != null && protocolCameraController.isAvailable();
     }
 }
